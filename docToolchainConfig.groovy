@@ -12,6 +12,7 @@ inputFiles = [
         [file: 'arc42/arc42-arc42-generator.adoc', formats: ['html']],
         [file: 'specs/prd-arc42-generator.adoc', formats: ['html']],
         [file: 'specs/use-cases-arc42-generator.adoc', formats: ['html']],
+        [file: 'specs/backlog-arc42-generator.adoc', formats: ['html']],
 ]
 
 taskInputsDirs = [:]
