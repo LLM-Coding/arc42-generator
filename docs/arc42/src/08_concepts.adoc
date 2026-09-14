@@ -1,0 +1,173 @@
+ifndef::imagesdir[:imagesdir: ../images]
+
+[[section-concepts]]
+== Cross-cutting Concepts
+
+Six concepts cut across the building blocks. The first five are the baseline every system in
+this project documents; the sixth exists because the generator is a multilingual text pipeline.
+
+[[concept-threat-model]]
+=== Threat Model
+
+The trust boundary is wide on purpose. Input and output are public open-source content, the build
+runs on maintainer machines, there is no user data and no running service.
+The threats below are named so that the acceptance is explicit rather than silent; they are
+accepted, not mitigated (<<ADR-006>>).
+
+[cols="1,1,3,2,1",options="header"]
+|===
+|ID |STRIDE |Threat |Evidence |Status
+
+|T-001
+|Tampering, Elevation of Privilege
+|A malicious translation pull request adds AsciiDoc that reads or writes arbitrary files during
+conversion, because Asciidoctor runs unrestricted.
+|`lib/Converter.groovy:100`, `:132`, `:311`
+|accepted
+
+|T-002
+|Tampering
+|A compromised upstream template repository is pulled unverified and shipped as ZIP archives; the
+build follows `master`, not the recorded submodule commit.
+|`build-arc42.sh:69`
+|accepted
+
+|T-003
+|Tampering
+|The Pandoc `.deb` and the Groovy ZIP are downloaded and installed without checksum or signature.
+|`build-arc42.sh:39-41`, `Dockerfile:23-25`
+|accepted
+
+|T-004
+|Spoofing
+|The published archives carry neither signature nor checksum, so a downloader cannot verify their
+origin.
+|`lib/Packager.groovy:83`
+|accepted
+
+|T-005
+|Elevation of Privilege
+|Git ownership checks are disabled for every directory inside the image.
+|`Dockerfile:61`
+|accepted
+|===
+
+[[concept-security]]
+=== Security
+
+One control exists, and it protects the developer's agent session rather than the build: reading
+`.env*` and `secrets/**` is denied, and Bash and Write require confirmation
+(`settings.json:12-20`). It closes none of T-001 to T-005.
+
+For every threat above the decision is the same: accept it, because the assets are public and the
+blast radius ends at the maintainer's own machine.
+Should that change — a hosted build service, signed releases, or template content from
+unreviewed sources — T-001 to T-004 turn into open findings and this section needs mitigations.
+
+[[concept-test]]
+=== Test
+
+Testing is integration-level only, deliberately (`TEST-REPORT.md:15`).
+The pyramid is inverted: there are no unit tests, three end-to-end suites, and two post-build
+validations in the shell script.
+
+[cols="1,2,2,2",options="header"]
+|===
+|Level |What it covers |Runs |Evidence
+
+|Suite: template generation
+|Language discovery, feature removal, output structure per language and flavor
+|`groovy test-templates.groovy`
+|`test-templates.groovy:21`, `:43-48`, `:62-74`
+
+|Suite: discovery
+|Metadata completeness, both flavors present, EN and DE present
+|`groovy test-discovery.groovy`
+|`test-discovery.groovy:30-34`, `:49-50`, `:79`
+
+|Suite: conversion
+|HTML, DocBook, Markdown, DOCX produced; multi-page yields more than one file
+|`groovy test-converter.groovy`
+|`test-converter.groovy:47`, `:55`, `:70`, `:78`, `:89-90`
+
+|Validation: CommonMark
+|Generated Markdown parses; non-fatal
+|`./build-arc42.sh`
+|`build-arc42.sh:94-104`, `:109-111`
+
+|Validation: images
+|Image directories exist and are non-empty; every Markdown image reference resolves; non-fatal
+|`./build-arc42.sh`
+|`build-arc42.sh:139-145`, `:174-177`
+|===
+
+The runner spawns one `groovy` process per suite and aggregates exit codes
+(`run-all-tests.groovy:55-64`, `:147-153`).
+No test carries a requirement or business-rule identifier; suites are named after the class they
+exercise. Traceability back to chapter 1.1 is therefore manual today — see <<TD-8>>.
+
+[[concept-observability]]
+=== Observability
+
+`println` to standard output, nothing else. No logging framework, no levels, no log file
+(`build.groovy:61-67`, `lib/Converter.groovy:436-439`, `lib/Packager.groovy:141-145`).
+
+What the run reports: progress per conversion, counts of completed, failed and skipped items, and
+a duration per phase (`lib/Converter.groovy:466-470`, `lib/Packager.groovy:173-178`).
+
+What it does not report: failure in the exit status. Conversion failures are counted but never
+change the exit code, and the packager's `failed` counter is never incremented, so its summary
+always reads `Failed: 0` (`lib/Packager.groovy:116`, `:177`). Both are <<R-2>>.
+
+[[concept-error-handling]]
+=== Error Handling
+
+Two boundaries, one retry, no breaker.
+
+[cols="1,3,2",options="header"]
+|===
+|Pattern |Where it applies |Evidence
+
+|Fail fast
+|Configuration load, class load and any phase exception terminate the process with exit code 1.
+|`build.groovy:83-86`, `:113-117`, `:130-136`
+
+|Fail soft
+|A single conversion is isolated per (template, format); the failure is logged and counted, the
+run continues.
+|`lib/Converter.groovy:74-78`
+
+|Retry
+|Git submodule update: three attempts, stale lock cleanup before each, a fixed two-second pause,
+hard exit afterwards.
+|`build-arc42.sh:66-78`
+
+|Deliberate swallow
+|Per-chapter AsciidoctorJ exceptions in the multi-page path, to skip config-only files.
+|`lib/Converter.groovy:313`
+
+|Silent fallback
+|An unknown format falls back to an identity Pandoc descriptor instead of being rejected.
+|`lib/Converter.groovy:400`
+
+|Circuit breaker, compensation
+|Neither exists. Nothing throttles or reverses after repeated failures.
+|—
+|===
+
+Given QG-1, the two silent paths — the warning-only Pandoc failure at `lib/Converter.groovy:345`
+and the missing exit code — are the gap this concept has to close; they are tracked as <<R-1>>
+and <<R-2>>.
+
+[[concept-encoding]]
+=== Encoding and Localisation
+
+The pipeline is multilingual, so encoding is explicit everywhere rather than left to the platform
+default: every read and write names UTF-8 (`lib/Templates.groovy:199`, `:218`, `:226`, `:241`;
+`lib/Discovery.groovy:121`), and the Pandoc child process gets `LC_ALL` and `LANG` set to
+`en_US.UTF-8` (`lib/Converter.groovy:213-214`).
+
+One language-specific rule exists: LaTeX output for Russian adds the font encoding `T1,T2A`
+(`lib/Converter.groovy:195-197`).
+Version metadata — `revnumber`, `revdate`, `revremark` — travels per language from
+`version.properties` into the AsciiDoc attributes (`lib/Converter.groovy:368-373`).

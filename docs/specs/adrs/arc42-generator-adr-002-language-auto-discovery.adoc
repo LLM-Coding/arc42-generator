@@ -1,0 +1,30 @@
+ifndef::imagesdir[:imagesdir: ../../arc42/images]
+
+[[ADR-002]]
+= ADR-002: Languages are discovered, not configured
+
+*Status:* accepted
+
+*Context:* translations arrive from the community. A configuration list means every new language
+needs a commit in this repository, by someone who may not be involved in the translation.
+
+*Decision:* a directory in the Golden Master whose name matches `/^[A-Z]{2,}$/` is a language
+(`lib/Templates.groovy:38`, mirrored for the generated tree at `lib/Discovery.groovy:62`).
+
+*Consequences:* adding a language costs nothing here (R-1). The price is an implicit contract:
+a directory named `EN-draft` is invisible, a directory named `DIST` would be mistaken for a
+language, and the rule lives in two places that must stay in step.
+
+[cols="2,1,1,1",options="header"]
+|===
+|Criterion |Explicit list (baseline) |Regex discovery |Manifest file in the Golden Master
+
+|QG-2 Maintainability |0 |+1 |+1
+|QG-3 Functional suitability |0 |0 |+1
+|Predictability |0 |-1 |+1
+|Effort in the template repository |0 |0 |-1
+|*Sum* |*0* |*0* |*+2*
+|===
+
+The manifest scores higher but was not chosen: it would put build metadata into the content
+repository, against <<ADR-007>>.

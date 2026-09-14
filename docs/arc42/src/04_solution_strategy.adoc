@@ -1,0 +1,57 @@
+ifndef::imagesdir[:imagesdir: ../images]
+
+[[section-solution-strategy]]
+== Solution Strategy
+
+Five decisions carry the design. Each one serves a quality goal from chapter 1.2 and is recorded
+as an ADR in chapter 9.
+
+[cols="1,3,1,1",options="header"]
+|===
+|Strategy |What it means |Serves |ADR
+
+|Plain script instead of a build tool
+|The pipeline is a Groovy script that loads four classes and runs four phases. No build tool, no
+generated build logic, no two-pass construction.
+|QG-2
+|<<ADR-001>>
+
+|DocBook as pivot format
+|HTML and AsciiDoc are produced directly; every other format goes AsciiDoc -> DocBook -> Pandoc.
+One pivot instead of seventeen converters.
+|QG-3, QG-2
+|<<ADR-003>>
+
+|Convention over configuration
+|Languages are discovered from the file system, not configured. A new translation needs no code
+and no config change.
+|QG-2
+|<<ADR-002>>
+
+|Parallelism where it is free
+|A GPars pool sized to the available processors converts templates concurrently and builds all
+archives concurrently.
+|QG-4
+|<<ADR-004>>
+
+|Container as the supported environment
+|All tools — JRE, Groovy, Pandoc, cmark — are pinned in one image, so a build behaves the same
+on any host.
+|QG-3, QG-4
+|<<ADR-005>>
+|===
+
+The pipeline itself is four phases in a fixed order, each guarded by the phase argument
+(`build.groovy:129-202`):
+
+. *Generate* — strip the unwanted features out of the Golden Master and write both flavors
+(`lib/Templates.groovy:155-257`).
+. *Discover* — scan the generated tree and build one metadata record per (language, flavor)
+(`lib/Discovery.groovy:43-154`).
+. *Convert* — run every template through every format (`lib/Converter.groovy:410-472`).
+. *Package* — zip each output directory into the distribution folder
+(`lib/Packager.groovy:102-185`).
+
+Discovery memoises its result for the lifetime of the process, with an explicit invalidation
+method, so the scan runs once even when two phases need it (`lib/Discovery.groovy:17`, `:45-47`,
+`:152`, `:159-161`).

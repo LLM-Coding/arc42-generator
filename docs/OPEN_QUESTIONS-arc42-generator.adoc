@@ -1,0 +1,133 @@
+= Socratic Code Theory Recovery: Open Questions — arc42-generator
+:jbake-menu: openquestions
+:jbake-title: Open Questions
+:jbake-type: page
+:jbake-status: published
+:toc: left
+:sectnums:
+
+Bounded context:: `arc42-generator` (whole repository, working tree at commit `6672693`)
+Phase:: 1 of 2. These nine questions are the handoff. Phase 2 synthesizes PRD, specification,
+arc42 document and ADRs only after they are answered.
+Source:: Every question is copied verbatim from `QUESTION_TREE-arc42-generator.adoc`, where it
+carries its Q-ID and the code evidence around it.
+How to answer:: One to three sentences per question, written back into this file under the
+question.
+
+== Product Owner
+
+=== Q1.5.3 Adoption metric
+Category: business-context.
+
+No download counter, telemetry, or target figure exists anywhere in the repository. Whether
+success is measured in downloads, languages covered, or formats supported cannot be derived.
+
+*Answer:* Der Release-Aufwand ist die Kennzahl. Erfolgreich ist der Generator, wenn ein Maintainer ein
+neues Template-Release ohne Handarbeit und ohne Spezialwissen herausbringt. Download-Zahlen
+werden nicht erhoben.
+
+=== Q1.6.3 Why that ranking?
+Category: business-context.
+
+The code guards EN and DE (`test-discovery.groovy:79`) and validates only EN Markdown
+(`build-arc42.sh:89`); images are checked for five formats (`build-arc42.sh:124`). Which
+languages and formats the community actually uses — and therefore which ones must never break —
+is not derivable from the code.
+
+*Answer:* EN und DE sind die Referenz: Core-Committer pflegen sie, alle Übersetzungen richten sich nach
+ihnen. Deshalb sichern die Tests genau diese beiden ab. Community-Sprachen dürfen nachziehen.
+
+== Architect
+
+=== Q1.4.3 Why not simply keep Gradle?
+Category: design-rationale.
+
+The code records the outcome, never the decision. Whether speed, the "chicken-and-egg problem"
+mentioned in `CLAUDE.md:120`, or maintainer skill set drove the rewrite is not derivable.
+
+*Answer:* Gradle wurde in der alten Fassung falsch eingesetzt: der erste Durchlauf erzeugte die
+Build-Skripte für den zweiten. Diese Zwei-Stufen-Konstruktion trieb die Komplexität hoch und
+wurde deshalb beseitigt. Die Build-Zeit war Folge, nicht Grund.
+
+=== Q3.8.1.1 Is a threat catalogue present?
+Category: design-rationale.
+
+No STRIDE analysis, no threat IDs, no security section exists in any document in the repository.
+Which threats the build is expected to withstand — hostile template content, a compromised
+upstream repository, a poisoned Pandoc download — must come from you.
+
+*Answer:* Kein Threat-Katalog, bewusst. Security spielt für diesen Build eine sehr untergeordnete Rolle:
+Ein- und Ausgabe sind öffentliche Open-Source-Inhalte, der Build läuft auf Maintainer-Rechnern,
+und es gibt weder Nutzerdaten noch einen laufenden Dienst. Die im Code belegten Punkte
+(`SafeMode.UNSAFE`, ungeprüfte Downloads, `safe.directory '*'`) sind damit akzeptierte Risiken,
+keine offenen Befunde. Für arc42 Kapitel 8.1 heißt das: STRIDE-Katalog entfällt, die
+Risikoakzeptanz wird als Entscheidung dokumentiert.
+
+=== Q3.8.2.3 Why was UNSAFE chosen?
+Category: design-rationale.
+
+`SafeMode.UNSAFE` is set at all three AsciidoctorJ call sites (`lib/Converter.groovy:100`,
+`:132`, `:311`). Whether UNSAFE is required for the template's own includes or was chosen to
+avoid debugging path errors is not derivable.
+
+*Answer:* Bequemlichkeit. `SafeMode.UNSAFE` erspart das Debuggen von Pfad- und Safe-Mode-Fehlern; ob
+`SERVER` oder `SAFE` ebenfalls genügen würden, ist nie geprüft worden. Zusammen mit der
+Risikoakzeptanz aus Q3.8.1.1 bleibt die Einstellung, wie sie ist — als bewusste Entscheidung,
+nicht als Befund.
+
+=== Q4.9 Which characteristic has priority?
+Category: quality-goals.
+
+The code guards performance and functional suitability with measurements, and leaves security
+and reliability to defaults. Whether that ranking is intended or accidental cannot be read from
+the code.
+
+*Answer:* Zuverlässigkeit hat Vorrang. Ein Build, der still Kapitel verschluckt (`lib/Converter.groovy:345`)
+oder Erfolg meldet, obwohl Konvertierungen scheiterten (`lib/Converter.groovy:437-440` mit
+`build.groovy:211-215`), ist das größte Problem — schwerer als Build-Zeit. Die gemessene
+Performance bleibt ein erreichtes Nebenziel, nicht das oberste.
+
+== Developer
+
+=== Q3.2.2.5 Review and branching rules
+Category: design-rationale.
+
+`CLAUDE.md:350` and `:356` prescribe feature branches and Conventional Commits for future work,
+but the history mixes conventional and free-form subjects and no branch protection or template
+is stored in the repository. Which rule actually binds contributors is not derivable.
+
+*Answer:* `CLAUDE.md` gilt ab jetzt: Feature-Branch vom Main, Conventional Commits, Pull Request. Die
+Regel bindet alle neuen Beiträge; die gemischte Altlast in der Historie bleibt unangetastet.
+Technisch durchgesetzt (Branch Protection, Commit-Lint) ist sie nicht.
+
+== Domain Expert
+
+=== Q2.6.10 The declared but unused `example` feature
+Category: business-context.
+
+`buildconfig.groovy:7` declares `example` as a Golden Master feature and
+`buildconfig.groovy:13-14` keeps a `with-examples` style commented out with the note "no content
+yet". What an `arc42example` block should contain, and whether the examples flavor is still
+intended, is a question about arc42 itself and cannot be answered from this repository.
+
+*Answer:* Nie genutztes Feature. Der Golden Master (Stand 2026-09, flacher Klon von
+`arc42/arc42-template`) enthält `arc42example` null mal, `arc42help` dagegen 995 mal in 168
+`.adoc`-Dateien. Die Templates tragen ausschließlich Hilfetexte, die der Build für die
+`plain`-Variante ausblendet. `example` in `buildconfig.groovy:7` erzeugt daher bei jedem Lauf
+eine Regex in `lib/Templates.groovy:80`, die nie trifft. Sollte `with-examples` etwas anderes
+meinen als die Hilfetexte, ist es nie gebaut worden — Feature-Flag und auskommentierter Style
+sind Kandidaten zum Entfernen.
+
+== Operations
+
+=== Q5.5.5 Growth limit of the current design
+Category: future-direction.
+
+Conversion parallelises over templates only, not over formats (`lib/Converter.groovy:430-432`).
+No figure exists for how many languages or formats the pipeline must still handle comfortably,
+so the point at which one-dimensional parallelism stops being adequate cannot be derived.
+
+*Answer:* Zeitbudget statt Größe: ein voller Build darf bis zu 20 Minuten dauern. Heute liegt er bei
+17,4 s (`TEST-REPORT.md:365`), also mehr als zwei Größenordnungen darunter. Die einstufige
+Parallelität bleibt damit auf absehbare Zeit ausreichend; die sequentielle Format-Schleife wird
+erst zum Thema, wenn dieses Budget gerissen wird.

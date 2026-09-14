@@ -1,0 +1,110 @@
+ifndef::imagesdir[:imagesdir: ../images]
+
+[[section-runtime-view]]
+== Runtime View
+
+Three scenarios matter: the full build, a conversion that fails, and the submodule refresh that
+precedes every containerised run.
+
+=== Full build
+
+[plantuml,06_full_build,svg]
+....
+@startuml
+actor Maintainer
+participant "build.groovy" as B
+participant "Templates" as T
+participant "Discovery" as D
+participant "Converter" as C
+participant "Packager" as P
+
+Maintainer -> B: groovy build.groovy
+B -> B: ConfigSlurper parses buildconfig.groovy
+B -> B: GroovyClassLoader loads four classes
+B -> T: createFromGoldenMaster()
+T -> T: discoverLanguages() by /^[A-Z]{2,}$/
+loop per language, per flavor
+  T -> T: removeFeatures(), adjustIncludePaths()
+  T -> T: copy images and common files
+end
+B -> D: discoverTemplates()
+D --> B: List<Map> metadata (memoised)
+B -> C: convertAll(templates, formats, parallel)
+loop parallel per template
+  loop sequential per format
+    C -> C: convertTemplate()
+  end
+end
+B -> P: createAllDistributions(templates, formats, parallel)
+loop parallel per (template, format)
+  P -> P: createZip()
+end
+B --> Maintainer: counts, durations, BUILD SUCCESSFUL
+@enduml
+....
+
+The parallelism is one-dimensional: the template loop runs in a GPars pool sized to the available
+processors, the format loop inside it is sequential (`lib/Converter.groovy:429-432`).
+Counters are incremented inside a `synchronized(this)` block (`:433`).
+
+=== A conversion fails
+
+[plantuml,06_failure,svg]
+....
+@startuml
+participant "Converter.convertAll" as A
+participant "convertTemplate" as T
+participant "Pandoc" as P
+
+A -> T: convertTemplate(template, format)
+T -> P: ProcessBuilder(pandoc ...)
+P --> T: exit code != 0
+T -> T: RuntimeException
+T -> T: catch, print message and stack trace
+T --> A: null
+A -> A: failed++
+note right of A
+  The run continues with the next format.
+  The process still exits with code 0.
+end note
+@enduml
+....
+
+Each conversion is isolated per (template, format) pair: the failure is logged, counted, and the
+run continues (`lib/Converter.groovy:74-78`, `:437-440`).
+Nothing propagates to the exit code, so a build with failed conversions still prints
+"BUILD SUCCESSFUL" (`build.groovy:211-215`). This is <<R-2>>, the most direct threat to QG-1.
+
+The multi-page path is quieter still: a failing Pandoc call there only prints a warning
+(`lib/Converter.groovy:345`), so the chapter is missing from the output and no counter notices.
+
+=== Submodule refresh
+
+[plantuml,06_submodule,svg]
+....
+@startuml
+participant "build-arc42.sh" as S
+participant "Git" as G
+
+S -> S: rm -rf arc42-template
+loop up to 3 attempts
+  S -> S: remove stale index.lock files
+  S -> G: submodule init, submodule update --force
+  S -> G: checkout master, pull
+  alt success
+    S -> S: break
+  else failure
+    S -> S: sleep 2
+  end
+end
+alt still failing after 3 attempts
+  S --> S: exit 1
+end
+@enduml
+....
+
+This is the only retry in the whole system (`build-arc42.sh:66-78`).
+It deletes the entire submodule directory first, which discards uncommitted template work —
+see <<R-3>>.
+It also checks out `master` and pulls, so the output follows whatever upstream holds at build
+time rather than the recorded submodule commit (`build-arc42.sh:69`, see <<R-4>>).

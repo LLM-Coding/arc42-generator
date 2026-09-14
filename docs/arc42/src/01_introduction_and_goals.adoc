@@ -1,0 +1,124 @@
+ifndef::imagesdir[:imagesdir: ../images]
+
+[[section-introduction-and-goals]]
+== Introduction and Goals
+
+The arc42-generator turns one source into many downloads.
+The arc42 template is maintained once, as AsciiDoc, in the `arc42-template` repository — the
+Golden Master.
+Readers want it as Word, Markdown, HTML, LaTeX and a dozen other formats, in their own language,
+with or without the embedded help texts.
+This generator produces every one of those combinations and packs each into a ZIP archive ready
+for download (`lib/Packager.groovy:83`).
+
+Nobody who merely uses an arc42 template needs this repository.
+The README says so in its first sentence (`README.adoc:3`): users download finished archives
+from arc42.org.
+This repository serves the people who produce those archives.
+
+=== Requirements Overview
+
+[cols="1,4,2",options="header"]
+|===
+|ID |Requirement |Evidence
+
+|R-1
+|The generator shall produce the template for every language directory found in the Golden
+Master, without a code or configuration change per language.
+|`lib/Templates.groovy:37-40`
+
+|R-2
+|The generator shall produce two content flavors: `plain` without help texts and `with-help`
+with them.
+|`buildconfig.groovy:10-15`, `lib/Templates.groovy:75-90`
+
+|R-3
+|The generator shall convert each flavor into all 17 configured output formats.
+|`buildconfig.groovy:17-35`, `lib/Converter.groovy:60-71`
+
+|R-4
+|The generator shall package each (language, flavor, format) combination as one ZIP archive in
+the distribution directory.
+|`lib/Packager.groovy:71-93`, `buildconfig.groovy:38`
+
+|R-5
+|The generator shall run as a single command, both in a container and as a plain Groovy script
+with phase and format filters.
+|`docker-compose.yml:9`, `build.groovy:16-21`
+
+|R-6
+|The generator shall validate its own output: generated Markdown parses as CommonMark, and every
+image referenced by a `with-help` Markdown file exists.
+|`build-arc42.sh:94-104`, `build-arc42.sh:151-182`
+|===
+
+Success is measured by release effort, not by downloads.
+The generator has done its job when a maintainer produces a complete template release without
+handwork and without special knowledge (team answer).
+
+=== Quality Goals
+
+These are the top goals, in order.
+Chapter 10 carries one concrete scenario per goal and covers the remaining ISO 25010
+characteristics as derived scenarios.
+
+[cols="1,2,4,1",options="header"]
+|===
+|ID |Quality Goal (ISO 25010) |Motivation |Scenario
+
+|QG-1
+|Reliability
+|A build that silently drops a chapter, or reports success although conversions failed, damages
+every downstream download. This outranks build speed (team answer).
+|<<QS-01>>
+
+|QG-2
+|Maintainability
+|A handful of volunteers maintain the generator beside their actual work. Adding a language must
+cost nothing; adding a format must stay cheap.
+|<<QS-02>>
+
+|QG-3
+|Functional Suitability
+|Every maintained language must appear in every supported format. Partial output is worse than a
+failed build.
+|<<QS-03>>
+
+|QG-4
+|Performance Efficiency
+|Speed is an achieved side goal, not the top one. The budget is generous: a full build may take
+up to 20 minutes (team answer), today it takes 17.4 s.
+|<<QS-04>>
+|===
+
+=== Stakeholders
+
+[cols="1,2,3",options="header"]
+|===
+|Role |Contact |Expectation
+
+|Template user
+|Anonymous, reaches the result through arc42.org/download
+|Finds a current, complete template in the format and language of choice. Never sees this
+repository (`README.adoc:3`).
+
+|Release maintainer
+|arc42 core committers
+|Produces a full release with one command and pushes the archives into the template repository
+(`build-arc42.sh:198-205`).
+
+|Translator / contributor
+|Community, per language
+|Works only in the template repository; the generator picks up a new language directory by
+itself (`lib/Templates.groovy:38`).
+
+|arc42 founders
+|Gernot Starke, Peter Hruschka
+|Guard the conceptual integrity of the template; decide what the template contains
+(`docs/arc42-requirements.adoc:101-102`).
+
+|Generator developer
+|Whoever changes this repository
+|Finds a build that is readable without build-tool knowledge, and a documented path for adding a
+format (`CLAUDE.md:170-181`).
+|===

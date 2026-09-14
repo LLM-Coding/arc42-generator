@@ -1,0 +1,24 @@
+ifndef::imagesdir[:imagesdir: ../images]
+
+[[section-design-decisions]]
+== Architecture Decisions
+
+Seven decisions shape this build. Each is recorded in Nygard form as its own file under
+`docs/specs/adrs/` and scored with a three-point Pugh matrix (`+1` better, `0` equal, `-1` worse)
+against the quality goals of chapter 1.2 and the maintenance effort. The baseline column is the
+option that was in place at the time.
+
+include::../../specs/adrs/arc42-generator-adr-001-groovy-instead-of-gradle.adoc[leveloffset=+2]
+
+include::../../specs/adrs/arc42-generator-adr-002-language-auto-discovery.adoc[leveloffset=+2]
+
+include::../../specs/adrs/arc42-generator-adr-003-docbook-pivot-format.adoc[leveloffset=+2]
+
+include::../../specs/adrs/arc42-generator-adr-004-parallelism-over-templates.adoc[leveloffset=+2]
+
+include::../../specs/adrs/arc42-generator-adr-005-docker-only-environment.adoc[leveloffset=+2]
+
+include::../../specs/adrs/arc42-generator-adr-006-accept-security-risk.adoc[leveloffset=+2]
+
+include::../../specs/adrs/arc42-generator-adr-007-golden-master-separate-repository.adoc[leveloffset=+2]
+

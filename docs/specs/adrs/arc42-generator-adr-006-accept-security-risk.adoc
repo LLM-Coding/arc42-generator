@@ -1,0 +1,31 @@
+ifndef::imagesdir[:imagesdir: ../../arc42/images]
+
+[[ADR-006]]
+= ADR-006: Security risk is accepted, not mitigated
+
+*Status:* accepted
+
+*Context:* Asciidoctor runs with `SafeMode.UNSAFE`, downloads carry no checksum, and Git ownership
+checks are off inside the image. A threat model would name five threats (<<concept-threat-model>>).
+
+*Decision:* accept T-001 to T-005 (team answer). Input and output are public content, the build runs on
+maintainer machines, there is no user data and no exposed service. `SafeMode.UNSAFE` stays; it was
+chosen for convenience, and whether a stricter mode would also work has never been tested
+(team answer).
+
+*Consequences:* no hardening work, and no security review blocking a release. The decision is
+bound to its context: a hosted build service, signed releases, or content from unreviewed sources
+invalidate it and turn the accepted threats into findings.
+
+[cols="2,1,1,1",options="header"]
+|===
+|Criterion |Accept (baseline) |Stricter SafeMode |Checksums plus pinned submodule commit
+
+|Effort |0 |-1 |-1
+|Risk reduction |0 |+1 |+1
+|QG-3 Functional suitability |0 |-1 |0
+|QG-1 Reliability |0 |0 |+1
+|*Sum* |*0* |*-1* |*+1*
+|===
+
+The third option scores higher and is the natural first step should the context change.

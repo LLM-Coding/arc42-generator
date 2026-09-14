@@ -1,0 +1,815 @@
+= Specification: arc42-generator
+:jbake-menu: spec
+:jbake-title: Specification
+:jbake-type: page
+:jbake-status: published
+:toc: left
+:toclevels: 3
+:sectnums:
+:revnumber: 1.0
+:revdate: 2026-09-14
+
+Status:: Recovered from the code. Every statement describes the system as it behaves today and
+carries its evidence as `file:line`. Facts that only the team could supply are marked
+(team answer). Where today's behaviour contradicts a goal of the PRD, the text says so and names
+the risk ID from chapter 11 of the architecture documentation.
+
+Companion documents:: `prd-arc42-generator.adoc` (problem and goals),
+`../arc42/arc42-arc42-generator.adoc` (structure and decisions).
+
+== Actors
+
+[cols="1,1,3",options="header"]
+|===
+|Actor |Kind |Role in this system
+
+|Release maintainer
+|human, primary
+|Starts the build, inspects the result, pushes the archives (`build-arc42.sh:198-205`).
+
+|Generator developer
+|human, primary
+|Changes the pipeline: adds a format, fixes a defect (`CLAUDE.md:170-181`).
+
+|Translator
+|human, offstage
+|Adds a language directory in the content repository; never invokes this system
+(`lib/Templates.groovy:38`).
+
+|AsciidoctorJ
+|system, supporting
+|In-process conversion to HTML and DocBook (`lib/Converter.groovy:33`).
+
+|Pandoc
+|system, supporting
+|Child process converting DocBook to every other format (`lib/Converter.groovy:208-217`).
+
+|cmark
+|system, supporting
+|Validates generated Markdown (`build-arc42.sh:94-104`).
+
+|Git / GitHub
+|system, supporting
+|Supplies the Golden Master, receives the archives (`build-arc42.sh:66-78`).
+|===
+
+== Business Rules
+
+Each rule carries the code that implements it.
+
+[cols="1,4,2",options="header"]
+|===
+|ID |Rule |Evidence
+
+|BR-1
+|A directory of the Golden Master is a language exactly when its name matches `/^[A-Z]{2,}$/`.
+The rule is implemented twice, on the input side and on the generated side, and both must agree.
+|`lib/Templates.groovy:38`, `lib/Discovery.groovy:62`
+
+|BR-2
+|A flavor is a named list of features to keep. Everything in `allFeatures` that the flavor does
+not list is removed.
+|`buildconfig.groovy:7-15`, `lib/Templates.groovy:205`
+
+|BR-3
+|Feature removal works two ways: `[role="arc42<feature>"]` delimited blocks are deleted entirely;
+for `help`, the `ifdef::arc42help[]` and `endif::arc42help[]` marker lines are deleted while their
+body is kept.
+|`lib/Templates.groovy:80`, `:84-87`
+
+|BR-4
+|The `plain` flavor receives only `arc42-logo.png`; every other flavor receives all images of the
+language.
+|`lib/Templates.groovy:114-133`
+
+|BR-5
+|Images are copied only for formats whose `imageFolder` flag is true. `mkdocs` and `mkdocsMP`
+receive them under `docs/images`, all others under `images`.
+|`buildconfig.groovy:18-34`, `lib/Converter.groovy:54`, `:282`
+
+|BR-6
+|Include paths are rewritten twice: on generation `include::adoc/` becomes `include::` and
+`include::../common/` becomes `include::../../../common/`; on AsciiDoc output every `include::`
+gains a `src/` prefix.
+|`lib/Templates.groovy:68`, `:71`, `lib/Converter.groovy:265`
+
+|BR-7
+|LaTeX output for the language `RU` is generated with the font encoding `T1,T2A`.
+|`lib/Converter.groovy:195-197`
+
+|BR-8
+|`mkdocsMP` output must not contain `config.md` or `about-arc42.md`; both are deleted after
+conversion.
+|`lib/Converter.groovy:348`
+
+|BR-9
+|In an archive file name the flavor is reduced to letters, so `with-help` becomes `withhelp`.
+|`lib/Packager.groovy:80`, `:83`
+
+|BR-10
+|Only `help` is a real feature. `example` is declared but appears zero times in the Golden Master,
+so its removal step is a no-op on every file (team answer). Technical debt TD-1.
+|`buildconfig.groovy:7`, `:13-14`
+|===
+
+== Persona Use Cases
+
+=== UC-1 Release a complete template set
+
+[cols="1,4"]
+|===
+|Primary Actor |Release maintainer (Rita)
+|Scope |arc42-generator, whole pipeline
+|Level |User goal
+|Stakeholders |Template user wants complete archives; translator wants their language included;
+founders want the current content
+|Preconditions |Docker available; the repository is cloned; the content repository is reachable
+|Trigger |New or corrected content exists in the Golden Master and should reach arc42.org
+|Postconditions (success) |One ZIP archive per language, flavor and format exists in
+`arc42-template/dist/`, and the maintainer knows whether anything failed
+|Postconditions (failure) |No archive is published, and the reason is visible in the log
+|===
+
+*Main success scenario*
+
+. The maintainer runs `docker compose up` (`docker-compose.yml:9`).
+. The system ensures Pandoc is present, installing it if necessary (`build-arc42.sh:19-45`).
+. The system refreshes the Golden Master submodule (`build-arc42.sh:66-78`).
+. The system generates both flavors for every discovered language, applying BR-1 to BR-4 and BR-6
+(`lib/Templates.groovy:155-257`).
+. The system discovers the generated templates and builds one metadata record each
+(`lib/Discovery.groovy:43-154`).
+. The system converts every template into every configured format, applying BR-5, BR-7 and BR-8
+(`lib/Converter.groovy:410-472`).
+. The system packages each output directory as one archive, applying BR-9
+(`lib/Packager.groovy:102-185`).
+. The system validates the generated Markdown and the image references
+(`build-arc42.sh:86-189`).
+. The system prints counts, durations and the release instructions (`build-arc42.sh:192-205`).
+. The maintainer inspects `arc42-template/dist/` and pushes the archives from the content
+repository.
+
+*Extensions*
+
+[cols="1,4",options="header"]
+|===
+|Step |Alternative
+
+|2a
+|Pandoc is missing and the architecture is unsupported: the script aborts with a message and exit
+code 1 (`build-arc42.sh:28-35`).
+
+|3a
+|The submodule update fails: up to three attempts with lock cleanup and a two-second pause; after
+the third the script exits 1 (`build-arc42.sh:66-78`).
+
+|3b
+|The submodule directory contains uncommitted work: it is deleted without warning. Risk R-3
+(`build-arc42.sh:57-60`).
+
+|4a
+|No language directory is found: the phase throws and the build exits 1
+(`lib/Templates.groovy:42-44`).
+
+|6a
+|A single conversion fails: the error is logged and counted, the run continues with the next
+format (`lib/Converter.groovy:74-78`).
+
+|6b
+|A chapter of a multi-page format fails: a warning is printed, the chapter is missing from the
+output, and no counter records it. Risk R-1 (`lib/Converter.groovy:345`).
+
+|8a
+|Markdown does not parse, or an image reference does not resolve: a warning is printed and the
+build continues; both checks are non-fatal (`build-arc42.sh:109-111`, `:187-188`).
+
+|9a
+|Conversions failed in step 6: the summary still reads "BUILD SUCCESSFUL" and the exit code is 0.
+Risk R-2 — this violates goal G-4 of the PRD (`build.groovy:211-215`).
+|===
+
+[plantuml,uc1_activity,svg]
+....
+@startuml
+start
+:docker compose up;
+if (Pandoc present?) then (no)
+  if (architecture supported?) then (no)
+    :message;
+    stop
+  else (yes)
+    :download and install .deb;
+  endif
+else (yes)
+endif
+repeat
+  :remove stale index locks;
+  :submodule init/update, checkout master, pull;
+repeat while (failed and attempts < 3?) is (yes)
+if (still failing?) then (yes)
+  :exit 1;
+  stop
+endif
+:generate flavors per language;
+if (any language found?) then (no)
+  :exit 1;
+  stop
+endif
+:discover templates;
+fork
+  :convert template A to all formats;
+fork again
+  :convert template B to all formats;
+end fork
+:package archives;
+:validate Markdown and images (non-fatal);
+:print counts and durations;
+note right
+  Today the exit code is 0
+  even when conversions failed (R-2)
+end note
+stop
+@enduml
+....
+
+=== UC-2 Add a new language
+
+[cols="1,4"]
+|===
+|Primary Actor |Translator (Tomás), offstage for this system
+|Scope |arc42-generator, generation phase
+|Level |User goal
+|Preconditions |The translation exists in the content repository
+|Trigger |A new directory whose name matches BR-1 is merged into the Golden Master
+|Postconditions (success) |The language appears in the next build in both flavors and every
+format, without any change in this repository
+|===
+
+*Main success scenario*
+
+. The translator merges the directory `<LANG>/` with `arc42-template.adoc`, `adoc/*.adoc`,
+`images/` and `version.properties` into the content repository.
+. On the next build the system discovers the directory by BR-1 (`lib/Templates.groovy:37-40`).
+. The system generates, converts and packages it like every other language.
+
+*Extensions*
+
+[cols="1,4",options="header"]
+|===
+|Step |Alternative
+
+|1a
+|The directory name does not match BR-1, for example `pt-BR` or `EN-draft`: the language is
+ignored silently, with no warning (`lib/Templates.groovy:38`).
+
+|1b
+|`version.properties` is missing: generation continues, and the template is documented as version
+`unknown` (`lib/Discovery.groovy:139`).
+
+|2a
+|The language directory lacks an `adoc/` directory: only the main file is processed, and the
+template consists of one file (`lib/Templates.groovy:231-232`).
+
+|3a
+|Only EN and DE are asserted by the test suite, so a defect in another language is not caught by
+tests (`test-discovery.groovy:79`).
+|===
+
+=== UC-3 Add an output format
+
+[cols="1,4"]
+|===
+|Primary Actor |Generator developer (Dana)
+|Scope |arc42-generator, conversion phase
+|Level |User goal
+|Preconditions |Pandoc supports the target format, or a direct converter exists
+|Trigger |A format is requested that the configuration does not yet contain
+|Postconditions (success) |The format is produced for every template and packaged like the others
+|===
+
+*Main success scenario*
+
+. The developer adds the format to the configuration map with its `imageFolder` flag
+(`buildconfig.groovy:17-35`).
+. The developer adds a descriptor — Pandoc format, file extension, extra arguments — to the
+descriptor table (`lib/Converter.groovy:382-398`).
+. If the format needs its own path, the developer extends the dispatch chain
+(`lib/Converter.groovy:60-71`).
+. The developer verifies with `groovy build.groovy --format=<name>` (`build.groovy:48-51`).
+
+*Extensions*
+
+[cols="1,4",options="header"]
+|===
+|Step |Alternative
+
+|2a
+|The descriptor is forgotten: the format silently falls back to an identity descriptor, so Pandoc
+is called with the format name as both target and file extension
+(`lib/Converter.groovy:400`).
+
+|4a
+|The format name is misspelled on the command line: no validation happens and the same fallback
+applies (`build.groovy:48-51`).
+|===
+
+=== UC-4 Rebuild one format quickly
+
+[cols="1,4"]
+|===
+|Primary Actor |Generator developer (Dana)
+|Scope |arc42-generator, CLI
+|Level |User goal
+|Preconditions |The templates have been generated at least once
+|Trigger |A change is to be checked without a full build
+|Postconditions (success) |Only the requested phase and format run
+|===
+
+*Main success scenario*
+
+. The developer runs `groovy build.groovy convert --format=html` (`build.groovy:16-21`).
+. The system skips generation, discovers the existing templates, converts only HTML.
+
+*Extensions*
+
+[cols="1,4",options="header"]
+|===
+|Step |Alternative
+
+|2a
+|No templates have been generated yet: discovery fails with a hint to run the `templates` phase
+first, exit code 1 (`build.groovy:150-160`).
+
+|1a
+|The phase name is misspelled, for example `covert`: no guard matches, nothing runs, and the
+script reports success. Technical debt TD-3 (`build.groovy:46`, `:129-185`).
+|===
+
+== System Use Cases
+
+One per technical interface. Each states input and validation, processing, output and status, and
+error responses.
+
+=== SUC-1 CLI: `groovy build.groovy`
+
+*Input*
+
+[cols="1,2,2,1",options="header"]
+|===
+|Parameter |Form |Default |Validation
+
+|Phase
+|First argument not starting with `--`: `templates`, `convert`, `distribution`, `all`
+|`all`
+|*None.* An unknown value matches no guard (`build.groovy:46`).
+
+|Format filter
+|`--format=<name>`
+|all configured formats
+|*None.* The value is not checked against the format map (`build.groovy:48-51`).
+
+|Parallelism
+|`--parallel=false`
+|parallel on
+|Exact string comparison; any other spelling leaves parallelism on (`build.groovy:47`).
+|===
+
+*Processing:* load `buildconfig.groovy` through `ConfigSlurper`; load the four classes by file
+name; run the phases the argument selects (`build.groovy:76`, `:101-111`, `:129-202`).
+
+*Output and status*
+
+[cols="1,3,2",options="header"]
+|===
+|Exit code |Meaning |Evidence
+
+|0
+|All selected phases ran — *or* an unknown phase ran nothing — *or* conversions failed but the
+process still completed. See TD-3 and R-2.
+|`build.groovy:211-215`
+
+|1
+|Configuration could not be loaded; a helper class could not be loaded; a phase threw; discovery
+found no templates.
+|`build.groovy:85`, `:116`, `:135`, `:152`, `:160`, `:177`, `:200`
+|===
+
+*Error responses:* every failure prints a line starting with `✗` and, for exceptions, a stack
+trace. A discovery failure adds the hint to run the `templates` phase first
+(`build.groovy:157-159`).
+
+=== SUC-2 Container entry point: `build-arc42.sh`
+
+*Input:* none. Behaviour is fixed; environment is the container.
+
+*Processing:* ensure Pandoc; refresh the submodule with up to three attempts; run
+`groovy build.groovy`; validate Markdown with cmark; validate image directories and Markdown image
+references (`build-arc42.sh:19-45`, `:66-78`, `:84`, `:86-189`).
+
+*Output and status*
+
+[cols="1,3,2",options="header"]
+|===
+|Exit code |Meaning |Evidence
+
+|0
+|Pipeline completed. Validation warnings do not change this.
+|`build-arc42.sh:106-115`, `:184-189`
+
+|1
+|Unsupported architecture for the Pandoc package, or the submodule refresh failed three times, or
+`groovy build.groovy` exited non-zero (`set -e`).
+|`build-arc42.sh:11`, `:32-35`, `:72-75`
+|===
+
+*Error responses:* messages prefixed `⚠` for non-fatal findings, `✗` for fatal ones.
+
+=== SUC-3 Configuration file: `buildconfig.groovy`
+
+*Input:* a Groovy script read by `ConfigSlurper`, with three blocks.
+
+[cols="1,3,2",options="header"]
+|===
+|Key |Meaning |Evidence
+
+|`goldenMaster.sourcePath`
+|Path to the content repository
+|`buildconfig.groovy:3`
+
+|`goldenMaster.targetPath`
+|Where generated AsciiDoc is written
+|`buildconfig.groovy:4`
+
+|`goldenMaster.allFeatures`
+|All features the Golden Master may mark
+|`buildconfig.groovy:7`
+
+|`goldenMaster.templateStyles`
+|Flavor name to list of features kept (BR-2)
+|`buildconfig.groovy:10-15`
+
+|`formats`
+|Format name to `[imageFolder: boolean]` (BR-5)
+|`buildconfig.groovy:17-35`
+
+|`distribution.targetPath`
+|Where archives are written
+|`buildconfig.groovy:38`
+|===
+
+*Validation:* none. There is no schema; a missing key surfaces as a Groovy exception at its use
+site. A malformed file aborts the run with exit code 1 (`build.groovy:83-86`).
+
+=== SUC-4 Input contract: Golden Master
+
+*Expected structure per language directory `<LANG>/`* (BR-1):
+
+[cols="1,3,2",options="header"]
+|===
+|Element |Requirement |Evidence
+
+|`arc42-template.adoc`
+|Main file. If absent, the flavor is generated without a main file and the template consists of
+the chapter files only.
+|`lib/Templates.groovy:213-228`
+
+|`adoc/*.adoc`
+|Chapter files. Only the `.adoc` extension is processed; subdirectories are ignored.
+|`lib/Templates.groovy:231-244`
+
+|`images/*`
+|Images. For `plain` only `arc42-logo.png` is taken; if it is missing, a warning is printed
+(BR-4).
+|`lib/Templates.groovy:112-124`
+
+|`version.properties`
+|Optional. Read as UTF-8; `revnumber`, `revdate`, `revremark` become AsciiDoc attributes. Absent
+means version `unknown`.
+|`lib/Templates.groovy:194-201`, `lib/Discovery.groovy:117-124`, `:139`
+
+|`common/` (repository level)
+|Shared files, copied recursively per language.
+|`lib/Templates.groovy:177-190`
+|===
+
+*Error responses:* a missing source path or an empty language set raises `IllegalStateException`
+and the phase exits 1 (`lib/Templates.groovy:33-35`, `:42-44`).
+
+=== SUC-5 Output contract: distribution
+
+[cols="1,3,2",options="header"]
+|===
+|Property |Rule |Evidence
+
+|Archive name
+|`arc42-template-<LANG>-<STYLE>-<FORMAT>.zip`, flavor reduced to letters (BR-9)
+|`lib/Packager.groovy:80`, `:83`
+
+|Archive content
+|Everything below `build/<LANG>/<FORMAT>/<STYLE>/`, with paths relative to that directory
+|`lib/Packager.groovy:44-52`
+
+|Location
+|`arc42-template/dist/`, created if missing
+|`buildconfig.groovy:38`, `lib/Packager.groovy:84-86`
+
+|Missing source
+|If the output directory does not exist, the archive is skipped and counted as `⊘ not found`;
+this is not an error
+|`lib/Packager.groovy:75-77`, `:143-145`
+|===
+
+*Status:* the summary always prints `Failed: 0`, because the counter is never incremented
+(R-2, `lib/Packager.groovy:116`, `:177`).
+
+=== SUC-6 Process contract: Pandoc
+
+*Input:* argument vector `pandoc -r docbook -t <pandocFormat> -o <absolute output file>
+<relative XML file name>`, plus format-specific arguments, plus `-s` for the standalone family
+(`lib/Converter.groovy:181-204`).
+
+*Environment:* working directory is the DocBook output directory so relative image paths resolve;
+`LC_ALL` and `LANG` are set to `en_US.UTF-8` (`lib/Converter.groovy:208-214`).
+
+*Output and status*
+
+[cols="1,3,2",options="header"]
+|===
+|Case |Response |Evidence
+
+|Exit 0, single page
+|Output file written; LaTeX gets thin spaces replaced afterwards
+|`lib/Converter.groovy:225-228`
+
+|Exit non-zero, single page
+|`RuntimeException`, caught one level up, conversion counted as failed
+|`lib/Converter.groovy:219-222`, `:74-78`
+
+|Exit non-zero, multi page
+|Warning only. The chapter is missing from the output and nothing is counted. Risk R-1.
+|`lib/Converter.groovy:345`
+|===
+
+== Acceptance Criteria
+
+[source,gherkin]
+----
+Feature: Generating template flavors
+
+  Scenario: The plain flavor contains no help texts
+    Given a Golden Master chapter with an arc42help block and an ifdef::arc42help marker
+    When the plain flavor is generated
+    Then the output contains neither '[role="arc42help"]' nor 'ifdef::arc42help'
+    And the text outside those blocks is unchanged
+
+  Scenario: The plain flavor ships only the logo
+    Given a language directory with six images including arc42-logo.png
+    When the plain flavor is generated
+    Then the images directory of that flavor contains exactly arc42-logo.png
+
+  Scenario: A new language needs no code change
+    Given a new directory 'HU' in the Golden Master
+    When the build runs
+    Then 'HU' appears in both flavors and every configured format
+    And no file in this repository was changed
+
+  Scenario: A directory that does not match the pattern is ignored
+    Given a directory 'pt-BR' in the Golden Master
+    When the build runs
+    Then no template is generated for 'pt-BR'
+
+Feature: Format conversion
+
+  Scenario: Multi-page Markdown yields one file per chapter
+    Given the generated EN plain template
+    When it is converted to markdownMP
+    Then the output directory contains more than one .md file
+
+  Scenario: mkdocsMP drops the configuration pages
+    Given the generated EN with-help template
+    When it is converted to mkdocsMP
+    Then the output contains neither config.md nor about-arc42.md
+
+  Scenario: Russian LaTeX carries the Cyrillic font encoding
+    Given the generated RU plain template
+    When it is converted to latex
+    Then pandoc was called with '-V fontenc=T1,T2A'
+
+Feature: Honest build result
+
+  Scenario: A failed conversion is visible in the result
+    Given a template whose conversion to docx fails
+    When the full build runs
+    Then the summary reports at least one failure
+    And the process exits with a non-zero code
+
+  Scenario: A failed chapter of a multi-page format is counted
+    Given a chapter whose pandoc call fails
+    When the markdownMP conversion runs
+    Then the failure is counted like a single-page failure
+    And the build does not report success
+----
+
+NOTE: The two scenarios of the last feature fail today. They describe goal G-4 of the PRD and are
+tracked as risks R-1 and R-2.
+
+== Requirements in EARS Syntax
+
+[cols="1,4,2",options="header"]
+|===
+|ID |Requirement |Evidence / status
+
+|E-1
+|WHEN the generation phase runs, the system SHALL treat every directory of the Golden Master whose
+name matches `/^[A-Z]{2,}$/` as a language.
+|`lib/Templates.groovy:38`
+
+|E-2
+|WHEN a flavor is generated, the system SHALL remove every feature that the flavor does not list.
+|`lib/Templates.groovy:205`, `:80`
+
+|E-3
+|IF the flavor is `plain`, THEN the system SHALL copy only `arc42-logo.png`.
+|`lib/Templates.groovy:114-124`
+
+|E-4
+|IF a format declares `imageFolder: true`, THEN the system SHALL copy the language images into the
+output directory of that format.
+|`lib/Converter.groovy:54`
+
+|E-5
+|WHILE parallel execution is enabled, the system SHALL convert templates concurrently using a pool
+sized to the available processors.
+|`lib/Converter.groovy:429`
+
+|E-6
+|IF a conversion fails, THEN the system SHALL log the failure, count it, and continue with the next
+conversion.
+|`lib/Converter.groovy:74-78`
+
+|E-7
+|IF at least one conversion failed, THEN the system SHALL exit with a non-zero code.
+|*Not implemented.* Risk R-2 (`build.groovy:211-215`).
+
+|E-8
+|IF Pandoc fails for a chapter of a multi-page format, THEN the system SHALL count the failure.
+|*Not implemented.* Risk R-1 (`lib/Converter.groovy:345`).
+
+|E-9
+|WHEN the submodule refresh fails, the system SHALL retry up to three times with a two-second pause
+and SHALL exit with code 1 afterwards.
+|`build-arc42.sh:66-78`
+
+|E-10
+|IF the phase argument names no known phase, THEN the system SHALL reject it.
+|*Not implemented.* Technical debt TD-3 (`build.groovy:46`).
+
+|E-11
+|WHEN an archive is created, the system SHALL name it
+`arc42-template-<LANG>-<STYLE>-<FORMAT>.zip` with the flavor reduced to letters.
+|`lib/Packager.groovy:80`, `:83`
+
+|E-12
+|WHEN files are read or written, the system SHALL use UTF-8.
+|`lib/Templates.groovy:199`, `:218`, `lib/Discovery.groovy:121`, `lib/Converter.groovy:213-214`
+|===
+
+== Supplementary Specifications
+
+=== Entity Model
+
+[plantuml,spec_entities,svg]
+....
+@startuml
+hide circle
+entity "Language" as lang {
+  code : String <<BR-1>>
+  --
+  versionProperties : Properties
+}
+entity "Flavor" as flavor {
+  name : String
+  --
+  featuresKept : List<String> <<BR-2>>
+}
+entity "Format" as format {
+  name : String
+  --
+  imageFolder : boolean <<BR-5>>
+  pandocFormat : String
+  extension : String
+  args : List<String>
+}
+entity "Template" as tpl {
+  language, style
+  --
+  srcDir, imagesDir, mainFile
+  hasImages, adocFileCount
+  revnumber
+}
+entity "Distribution" as dist {
+  fileName <<BR-9>>
+  --
+  sourceDir
+}
+lang ||--o{ tpl
+flavor ||--o{ tpl
+tpl }o--o{ format
+tpl ||--o{ dist
+format ||--o{ dist
+@enduml
+....
+
+`Template` is the only record that crosses stage boundaries. It exists solely as an untyped `Map`
+with 13 keys (`lib/Discovery.groovy:127-140`); `Format` is split across two places, the
+configuration map and the descriptor table (`buildconfig.groovy:17-35`,
+`lib/Converter.groovy:382-398`). Both are technical debt TD-7 and a maintainability cost noted in
+QS-02.
+
+=== State Machine: a single conversion
+
+[plantuml,spec_states,svg]
+....
+@startuml
+[*] --> Dispatched
+Dispatched --> DirectHTML : format == html
+Dispatched --> CopiedAsciiDoc : format == asciidoc
+Dispatched --> Pivoted : every other format
+Pivoted --> PandocRunning : DocBook written
+PandocRunning --> Converted : exit 0
+PandocRunning --> Failed : exit != 0 (single page)
+PandocRunning --> SilentlyIncomplete : exit != 0 (multi page)
+DirectHTML --> Converted
+CopiedAsciiDoc --> Converted
+Converted --> [*]
+Failed --> [*] : counted, run continues
+SilentlyIncomplete --> [*] : warning only, nothing counted
+note bottom of SilentlyIncomplete
+  Risk R-1: this state is
+  indistinguishable from success
+  in the build result
+end note
+@enduml
+....
+
+=== Interface Contracts
+
+Summarised from SUC-1 to SUC-6:
+
+* *CLI* — three optional arguments, no validation, two exit codes.
+* *Configuration* — Groovy script, three blocks, no schema.
+* *Golden Master* — one main file, a chapter directory, images, an optional version file.
+* *Distribution* — one archive per triple, fixed name pattern, missing source is skipped silently.
+* *Pandoc* — argument vector plus UTF-8 environment; error handling differs between single-page
+and multi-page, which is R-1.
+* *AsciidoctorJ* — `SafeMode.UNSAFE`, base directory is the template source directory, attributes
+from `createAttributes` (`lib/Converter.groovy:95`, `:356-376`).
+
+=== Validation Rules
+
+[cols="1,3,2,1",options="header"]
+|===
+|ID |Rule |Evidence |Enforced
+
+|V-1
+|The Golden Master source path must exist.
+|`lib/Templates.groovy:33-35`
+|yes, fatal
+
+|V-2
+|At least one language directory must be found.
+|`lib/Templates.groovy:42-44`
+|yes, fatal
+
+|V-3
+|A generated flavor must contain a `src/` directory with at least one `.adoc` file, otherwise it
+is skipped with a warning.
+|`lib/Discovery.groovy:96-105`
+|yes, warning
+
+|V-4
+|Expected languages and flavors must be present.
+|`lib/Discovery.groovy:219-241`
+|only in tests
+
+|V-5
+|Generated Markdown must parse as CommonMark.
+|`build-arc42.sh:94-104`
+|yes, non-fatal, EN only
+
+|V-6
+|Every image directory of a `with-help` flavor must exist and be non-empty, for the five
+image-bearing formats.
+|`build-arc42.sh:124-149`
+|yes, non-fatal
+
+|V-7
+|Every image reference in a `with-help` Markdown file must resolve.
+|`build-arc42.sh:151-182`
+|yes, non-fatal
+
+|V-8
+|The phase and format arguments must name known values.
+|—
+|*no* — TD-3
+|===

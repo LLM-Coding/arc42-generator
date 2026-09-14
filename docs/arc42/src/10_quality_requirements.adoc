@@ -1,0 +1,148 @@
+ifndef::imagesdir[:imagesdir: ../images]
+
+[[section-quality-scenarios]]
+== Quality Requirements
+
+=== Quality Requirements Overview
+
+All eight ISO/IEC 25010 characteristics are covered. Four of them concretise a top goal from
+chapter 1.2; the remaining four are derived from measurable behaviour in the code.
+No target number here is invented — every response measure is quoted from the repository.
+
+[cols="1,2,1,1",options="header"]
+|===
+|ID |ISO 25010 characteristic |Relation to chapter 1.2 |Priority
+
+|<<QS-01>> |Reliability |concretises QG-1 |high
+|<<QS-02>> |Maintainability |concretises QG-2 |high
+|<<QS-03>> |Functional Suitability |concretises QG-3 |high
+|<<QS-04>> |Performance Efficiency |concretises QG-4 |medium
+|<<QS-05>> |Compatibility |derived |medium
+|<<QS-06>> |Interaction Capability |derived |medium
+|<<QS-07>> |Security |derived |low, accepted (<<ADR-006>>)
+|<<QS-08>> |Flexibility |derived |medium
+|===
+
+=== Quality Scenarios
+
+[[QS-01]]
+==== QS-01 A failed conversion must not pass as success (QG-1)
+
+[cols="1,4"]
+|===
+|Source |Pandoc or AsciidoctorJ, during a full build
+|Stimulus |One chapter, or one (template, format) conversion, fails
+|Artifact |`Converter.convertAll` and the exit path of `build.groovy`
+|Environment |Normal operation, full build of all languages and formats
+|Response |The failure is counted, named in the log, and visible in the process result
+|Response Measure |Today: the single-page path counts the failure (`lib/Converter.groovy:437-440`)
+but the process still exits 0 (`build.groovy:211-215`), and the multi-page path only prints a
+warning (`:345`). Target: exit code non-zero whenever `failed > 0`. Gap tracked as <<R-1>> and
+<<R-2>>.
+|===
+
+[[QS-02]]
+==== QS-02 Adding a language costs nothing, adding a format costs three edits (QG-2)
+
+[cols="1,4"]
+|===
+|Source |A translator, respectively a generator developer
+|Stimulus |A new language directory appears; or a new output format is requested
+|Artifact |`Templates.discoverLanguages`, respectively `buildconfig.groovy` and `Converter`
+|Environment |Development time
+|Response |The language is picked up without any change here; the format is added at the known
+places
+|Response Measure |Language: zero changed files (`lib/Templates.groovy:37-40`). Format: exactly
+three edits — `buildconfig.groovy:17-35`, the dispatch chain `lib/Converter.groovy:60-71`, and the
+descriptor table `:382-398`; procedure documented at `CLAUDE.md:170-181`.
+|===
+
+[[QS-03]]
+==== QS-03 Every maintained language appears in every format (QG-3)
+
+[cols="1,4"]
+|===
+|Source |Release maintainer
+|Stimulus |A full build for a release
+|Artifact |The whole pipeline
+|Environment |Container, all languages, all formats
+|Response |One ZIP archive exists per language, flavor and format
+|Response Measure |languages x 2 flavors x 17 formats, computed and printed by the build itself
+(`build.groovy:220-223`); last measured run: 18 templates from nine languages
+(`TEST-REPORT.md:119`), archives named per `lib/Packager.groovy:83`.
+|===
+
+[[QS-04]]
+==== QS-04 A full build stays well inside the time budget (QG-4)
+
+[cols="1,4"]
+|===
+|Source |Release maintainer
+|Stimulus |Full build, all languages and formats
+|Artifact |Conversion and packaging phases
+|Environment |Developer machine, parallelism enabled
+|Response |The build completes without manual intervention
+|Response Measure |Budget 20 minutes (team answer). Measured: 17.4 s end to end, of which 10.7 s
+template generation and 0.6 s packaging (`TEST-REPORT.md:365`, `:102`, `:274`) — more than two
+orders of magnitude inside the budget.
+|===
+
+[[QS-05]]
+==== QS-05 Generated Markdown parses as CommonMark (derived)
+
+[cols="1,4"]
+|===
+|Source |A downstream Markdown consumer, for example GitHub or MkDocs
+|Stimulus |Reads a generated Markdown file
+|Artifact |Pandoc output of the Markdown family of formats
+|Environment |Post-build validation in `build-arc42.sh`
+|Response |The file parses without error
+|Response Measure |`cmark` exits 0 for every file in `build/EN/markdown`
+(`build-arc42.sh:94-104`). The check is non-fatal (`:109-111`) and covers EN only.
+|===
+
+[[QS-06]]
+==== QS-06 One command produces everything (derived)
+
+[cols="1,4"]
+|===
+|Source |Release maintainer, possibly a first-time one
+|Stimulus |Wants all outputs, or just one format for a quick check
+|Artifact |CLI of `build.groovy` and the container entry point
+|Environment |Any host with Docker
+|Response |The build runs and reports progress line by line
+|Response Measure |One command: `docker compose up` (`docker-compose.yml:9`); optional narrowing
+by phase and format (`build.groovy:16-21`); one progress line per conversion
+(`lib/Converter.groovy:436`).
+|===
+
+[[QS-07]]
+==== QS-07 Hostile template content is executed, knowingly (derived)
+
+[cols="1,4"]
+|===
+|Source |A contributor with write access to the Golden Master
+|Stimulus |Template content contains an include or a macro that reads or writes files
+|Artifact |AsciidoctorJ conversion
+|Environment |Build on a maintainer machine
+|Response |The content is processed without restriction
+|Response Measure |`SafeMode.UNSAFE` at all three call sites (`lib/Converter.groovy:100`, `:132`,
+`:311`); no checksum on any download (`build-arc42.sh:39-41`). Accepted, see <<ADR-006>> and
+T-001 to T-005.
+|===
+
+[[QS-08]]
+==== QS-08 The same build runs on every supported host (derived)
+
+[cols="1,4"]
+|===
+|Source |A maintainer on Linux, macOS, Windows or GitHub Codespaces
+|Stimulus |Starts the build
+|Artifact |Container image, shell script, Git configuration
+|Environment |amd64 or arm64
+|Response |The pipeline runs and produces identical output
+|Response Measure |Architecture-specific Pandoc package selected at runtime
+(`build-arc42.sh:23-36`); LF enforced for scripts (`.gitattributes:2-7`); Codespaces permissions
+declared (`.devcontainer/devcontainer.json:4-9`); tool versions pinned in the image
+(`Dockerfile:13-26`).
+|===

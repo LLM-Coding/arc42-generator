@@ -1,0 +1,143 @@
+ifndef::imagesdir[:imagesdir: ../images]
+
+[[section-technical-risks]]
+== Risks and Technical Debts
+
+Risks threaten a quality goal in operation. Technical debt costs effort on every change but does
+not, by itself, break a build. Both lists come from the code, not from a risk register — the
+repository has none.
+
+=== Risks
+
+[cols="1,3,1,2,1",options="header"]
+|===
+|ID |Risk |Threatens |Evidence |Mitigation
+
+|[[R-1]]R-1
+|A chapter that Pandoc fails to convert disappears from multi-page output. The failure only
+prints a warning, no counter notices, and the archive is shipped incomplete.
+|QG-1
+|`lib/Converter.groovy:345`
+|Count the failure like the single-page path does and fail the phase. Open.
+
+|[[R-2]]R-2
+|A build with failed conversions still reports success. Failures are counted but never reach the
+exit code, and the packager's `failed` counter is never incremented, so its summary always reads
+`Failed: 0`.
+|QG-1
+|`lib/Converter.groovy:437-440`, `build.groovy:211-215`, `lib/Packager.groovy:116`, `:177`
+|Exit non-zero when `failed > 0`; increment or remove the dead counter. Open.
+
+|[[R-3]]R-3
+|The containerised pipeline deletes the whole `arc42-template` directory before re-initialising
+it, discarding uncommitted template work.
+|QG-1
+|`build-arc42.sh:57-60`
+|Refuse to delete a dirty submodule, or require an explicit flag. Open.
+
+|[[R-4]]R-4
+|The build checks out `master` and pulls, so the output follows whatever upstream holds at build
+time rather than the recorded submodule commit. Two runs of the same generator commit can produce
+different archives.
+|QG-3
+|`build-arc42.sh:69`
+|Build the pinned submodule commit; update it as an explicit step. Open, see <<ADR-006>> for the
+related trust decision.
+
+|[[R-5]]R-5
+|Outside the container, Grape resolves AsciidoctorJ, the diagram extension and GPars when the
+script starts, so a repository outage or rate limit breaks the build. This contradicts the stated
+requirement of a network-free build.
+|QG-3
+|`lib/Converter.groovy:3-5`, requirement `docs/arc42_build_process_requirements.md:323`
+|Mitigated inside the image by the pre-populated cache (`Dockerfile:40-45`); unmitigated locally.
+
+|[[R-6]]R-6
+|Parallelism runs over templates only, so the speed-up is capped by the number of templates. All
+workers share one Asciidoctor instance and one lock for the progress counter.
+|QG-4
+|`lib/Converter.groovy:429-433`, `:33`
+|None needed while the 20-minute budget holds (<<QS-04>>); revisit if it is breached.
+
+|[[R-7]]R-7
+|Releasing means committing generated archives inside the content repository by hand. A forgotten
+push leaves the download page stale, and there is no pipeline to catch it.
+|QG-1
+|`buildconfig.groovy:38`, `build-arc42.sh:198-205`
+|Automate the release once CI exists (<<TD-6>>). Open.
+|===
+
+=== Technical Debt
+
+[cols="1,3,2,1",options="header"]
+|===
+|ID |Debt |Evidence |Effort
+
+|[[TD-1]]TD-1
+|The `example` feature is declared and never used (team answer). A check of the Golden Master
+found `arc42example` zero times against 995 occurrences of `arc42help` in 168 files, so the feature
+regex runs over every file on every build and never matches. The `with-examples` flavor has been
+commented out with "no content yet" ever since.
+|`buildconfig.groovy:7`, `:13-14`, `lib/Templates.groovy:80`
+|small
+
+|[[TD-2]]TD-2
+|The HTML charset fix-up is unreachable: it lives in `convertViaPandoc`, but `html` is routed to
+AsciidoctorJ one level up.
+|`lib/Converter.groovy:231-238` against `:60-61`
+|small
+
+|[[TD-3]]TD-3
+|A mistyped phase argument matches no guard, so the build does nothing and prints
+"BUILD SUCCESSFUL". The CLI validates neither the phase nor the format.
+|`build.groovy:46`, `:129`, `:145`, `:168`, `:185`; format at `:48-51` with `lib/Converter.groovy:400`
+|small
+
+|[[TD-4]]TD-4
+|`switchToreq42.sh` rewrites `build.gradle`, `settings.gradle` and `subBuild.gradle` and calls
+`./gradlew`. None of those files exist since <<ADR-001>>; the req42 path is broken.
+|`switchToreq42.sh:1-4`, `:10-12`
+|medium
+
+|[[TD-5]]TD-5
+|The runtime image copies only the build scripts and `lib/`, so the test suite cannot run inside
+the container that the project declares as the only supported environment.
+|`Dockerfile:78-79` against `run-all-tests.groovy:22-36`
+|small
+
+|[[TD-6]]TD-6
+|CI runs the documentation build only (`.github/workflows/documentation.yml`). Nothing runs the
+test suite or the template build on push, although the requirements ask for it.
+|`docs/arc42_build_process_requirements.md:229`
+|medium
+
+|[[TD-7]]TD-7
+|All data between stages travels as untyped `Map`. A renamed key fails at runtime, not at compile
+time, and the 13-field record is documented only by its construction site.
+|`lib/Discovery.groovy:127-140`, consumed at `lib/Converter.groovy:86`, `:95`, `:157`
+|medium
+
+|[[TD-8]]TD-8
+|No test carries a requirement or business-rule identifier, so traceability from chapter 1.1 to
+the suites is manual.
+|`run-all-tests.groovy:22-36`
+|small
+
+|[[TD-9]]TD-9
+|`CLAUDE.md` documents the language pattern as `/^[A-Z]{2}$/` while the code implements
+`/^[A-Z]{2,}$/`, so the document excludes three-letter codes such as `UKR` that the build accepts.
+The same file still carries operating instructions for a removed MCP server.
+|`CLAUDE.md:52` against `lib/Templates.groovy:38`; `CLAUDE.md:217-280`
+|small
+
+|[[TD-10]]TD-10
+|The same recursive image copy is written four times with small variations.
+|`lib/Templates.groovy:127-131`, `lib/Converter.groovy:162-169`, `:287-294`, `:328-330`
+|small
+
+|[[TD-11]]TD-11
+|`test-asciidoc-direct.groovy` hard-codes absolute paths under `/workspaces/arc42-generator`,
+which exist only in Codespaces.
+|`test-asciidoc-direct.groovy:11-13`
+|small
+|===

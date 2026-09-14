@@ -1,0 +1,306 @@
+= Backlog: arc42-generator
+:jbake-menu: backlog
+:jbake-title: Backlog
+:jbake-type: page
+:jbake-status: published
+:toc: left
+:toclevels: 2
+:sectnums:
+:revnumber: 1.0
+:revdate: 2026-09-14
+
+Status:: Derived from the specification and the architecture documentation. Each entry is written
+to become one GitHub issue verbatim — EPICs first, then their user stories.
+The issue tracker of this repository is currently disabled, so the backlog lives here until it is
+switched on under Settings -> General -> Features -> Issues.
+
+Priorities:: MoSCoW. *Must* blocks the next release, *Should* is the following increment, *Could*
+is taken when it is cheap.
+
+Traceability:: Risk and debt IDs (R-x, TD-x) point into chapter 11 of
+`../arc42/arc42-arc42-generator.adoc`; requirement IDs (E-x, V-x) into
+`use-cases-arc42-generator.adoc`.
+
+== EPIC 1: The build tells the truth about its result (Must)
+
+*Goal:* what the build reports as finished is complete, and what fails is visible in the result,
+not only in the log.
+
+*Why:* reliability is the top quality goal (team answer). Today the code breaks it in three
+places: a failed conversion never reaches the exit code (`build.groovy:211-215`), a failed chapter
+of a multi-page format only prints a warning and vanishes from the output
+(`lib/Converter.groovy:345`), and the packager always reports `Failed: 0`
+(`lib/Packager.groovy:116`, `:177`). A release can go out incomplete without anyone noticing.
+
+*Definition of done:* all stories closed; `groovy run-all-tests.groovy` green; a build with a
+deliberately failing conversion exits non-zero; E-7, E-8 and E-10 satisfied.
+
+=== US-1 A failed conversion fails the build (Must)
+
+As a release maintainer I want the build to exit non-zero when any conversion failed, so that I
+never push an incomplete release.
+
+Depends on: none. Blocks: US-3.
+
+[source,gherkin]
+----
+Scenario: A failed conversion is visible in the result
+  Given a template whose conversion to docx fails
+  When the full build runs
+  Then the summary reports at least one failure
+  And the process exits with a non-zero code
+----
+
+Evidence: `lib/Converter.groovy:437-440`, `build.groovy:211-215`. Implements E-7, closes R-2 in
+part.
+
+=== US-2 A failed chapter of a multi-page format is counted (Must)
+
+As a release maintainer I want a chapter that Pandoc cannot convert to be counted like any other
+failure, so that an incomplete archive cannot pass as complete.
+
+Depends on: none. Related: US-1 (shares the failure path).
+
+[source,gherkin]
+----
+Scenario: A failed chapter of a multi-page format is counted
+  Given a chapter whose pandoc call fails
+  When the markdownMP conversion runs
+  Then the failure is counted like a single-page failure
+  And the build does not report success
+----
+
+Evidence: `lib/Converter.groovy:345` against `:219-222`. Implements E-8, closes R-1.
+
+=== US-3 The packager reports its real failure count (Must)
+
+As a release maintainer I want the distribution summary to show actual failures, so that
+`Failed: 0` means something.
+
+Depends on: US-1 (same exit-code decision).
+
+[source,gherkin]
+----
+Scenario: A failed archive is counted
+  Given an output directory that cannot be zipped
+  When the distribution phase runs
+  Then the summary reports one failure
+----
+
+Evidence: `lib/Packager.groovy:116`, `:177`. Closes R-2.
+
+=== US-4 The CLI rejects unknown phases and formats (Must)
+
+As a generator developer I want a mistyped argument to be rejected, so that a typo cannot look
+like a successful build.
+
+Depends on: none.
+
+[source,gherkin]
+----
+Scenario: An unknown phase is rejected
+  When the build is started with the phase 'covert'
+  Then the run stops with a message naming the valid phases
+  And the exit code is non-zero
+
+Scenario: An unknown format is rejected
+  When the build is started with '--format=wordperfect'
+  Then the run stops with a message naming the configured formats
+----
+
+Evidence: `build.groovy:46`, `:48-51`, guards `:129-185`, fallback `lib/Converter.groovy:400`.
+Implements E-10 and V-8, closes TD-3.
+
+== EPIC 2: Remove what is dead (Should)
+
+*Goal:* the code contains nothing that no longer runs or no longer applies.
+
+*Why:* every dead branch costs a reader time and misleads the next change. Five findings are
+documented as technical debt; none of them changes behaviour when removed.
+
+*Definition of done:* all stories closed; test suite green; no reference to a removed element
+remains in the documentation.
+
+=== US-5 Remove the unused `example` feature (Should)
+
+As a generator developer I want the `example` feature gone, so that the configuration describes
+what the build actually does.
+
+`example` is declared in `buildconfig.groovy:7` and the `with-examples` flavor is commented out
+with "no content yet" (`:13-14`). The Golden Master contains `arc42example` zero times against 995
+occurrences of `arc42help` in 168 files (team answer), so the removal regex in
+`lib/Templates.groovy:80` runs over every file on every build and never matches.
+
+Depends on: none. Note: confirm with the arc42 founders that the examples flavor is not merely
+dormant before deleting the flag.
+
+[source,gherkin]
+----
+Scenario: Feature removal handles only real features
+  Given the configuration lists only the feature 'help'
+  When both flavors are generated
+  Then the output is byte-identical to the previous release
+----
+
+Closes TD-1.
+
+=== US-6 Remove the unreachable HTML charset branch (Should)
+
+As a generator developer I want dead code removed, so that nobody debugs a branch that cannot run.
+
+The charset fix-up sits in `convertViaPandoc` (`lib/Converter.groovy:231-238`), but `html` is
+routed to AsciidoctorJ one level up (`:60-61`), so the branch is unreachable.
+
+Depends on: none. Closes TD-2.
+
+=== US-7 Repair or remove `switchToreq42.sh` (Should)
+
+As a generator developer I want the req42 path to either work or be gone, so that no script
+promises something it cannot deliver.
+
+The script rewrites `build.gradle`, `settings.gradle` and `subBuild.gradle` and calls `./gradlew`
+(`switchToreq42.sh:1-4`, `:10-12`). None of those exist since the Gradle build was dropped.
+
+Decision needed before implementation: revive req42 support against the Groovy pipeline, or delete
+the script.
+
+Depends on: none. Closes TD-4.
+
+=== US-8 Correct the drift in `CLAUDE.md` (Should)
+
+As a generator developer I want the project documentation to match the code, so that I can trust
+it.
+
+`CLAUDE.md:52` documents the language pattern as `/^[A-Z]{2}$/` while `lib/Templates.groovy:38`
+implements `/^[A-Z]{2,}$/`, so the document excludes three-letter codes such as `UKR` that the
+build accepts. The same file still carries operating instructions for an MCP server that was
+removed.
+
+Depends on: none. Closes TD-9.
+
+=== US-9 A typed record instead of an untyped map (Could)
+
+As a generator developer I want the template record to be a type, so that a renamed key fails at
+compile time rather than at runtime.
+
+The 13-field record is built at `lib/Discovery.groovy:127-140` and read at
+`lib/Converter.groovy:86`, `:95`, `:157`.
+
+Depends on: none, but touches every stage — schedule it alone. Closes TD-7.
+
+=== US-10 Tests carry requirement identifiers (Could)
+
+As a generator developer I want each test to name the requirement or business rule it covers, so
+that traceability is mechanical rather than manual.
+
+Suites are named after the class they exercise (`run-all-tests.groovy:22-36`); business rules
+BR-1 to BR-10 and requirements E-1 to E-12 exist in the specification.
+
+Depends on: none. Closes TD-8.
+
+=== US-11 One image copy instead of four (Could)
+
+As a generator developer I want the recursive image copy in one place, so that a fix applies
+everywhere.
+
+Four near-identical copies: `lib/Templates.groovy:127-131`, `lib/Converter.groovy:162-169`,
+`:287-294`, `:328-330`.
+
+Depends on: none. Refactoring only — behaviour must not change, and the commit must not contain
+anything else. Closes TD-10.
+
+== EPIC 3: A pipeline runs the build (Should)
+
+*Goal:* tests and build run automatically, not only when someone remembers.
+
+*Why:* the requirements ask for example GitHub Actions workflows
+(`docs/arc42_build_process_requirements.md:229`). A first workflow now exists — it builds the
+documentation microsite and publishes it to GitHub Pages
+(`.github/workflows/documentation.yml`) — but nothing runs the test suite or the template build.
+Without that, EPIC 1 has no place to prove itself.
+
+*Definition of done:* a push runs the test suite and a format-filtered build; a failing test turns
+the check red.
+
+=== US-12 A GitHub Actions workflow runs the test suite (Should)
+
+As a generator developer I want every push to run the tests, so that a regression is caught before
+review.
+
+Depends on: US-13 (the container must be able to run the tests).
+
+[source,gherkin]
+----
+Scenario: A broken change turns the check red
+  Given a change that breaks feature removal
+  When the workflow runs
+  Then the check fails and names the failing suite
+----
+
+Closes TD-6, satisfies constraint C-O-4.
+
+=== US-13 The test suite runs inside the container image (Should)
+
+As a generator developer I want to run the tests in the only supported environment, so that a
+green local run means something.
+
+The runtime image copies only the build scripts and `lib/` (`Dockerfile:78-79`), so
+`run-all-tests.groovy` and the four test scripts are missing (`run-all-tests.groovy:22-36`).
+
+Depends on: none. Blocks: US-12. Closes TD-5.
+
+=== US-14 Remove the hardcoded Codespaces paths from the direct test (Could)
+
+As a generator developer I want `test-asciidoc-direct.groovy` to run anywhere, so that it is
+usable outside Codespaces.
+
+Absolute paths under `/workspaces/arc42-generator` at `test-asciidoc-direct.groovy:11-13`.
+
+Depends on: none. Closes TD-11.
+
+== EPIC 4: Template work is safe (Should)
+
+*Goal:* the build never destroys content work, and a given generator commit produces a
+reproducible result.
+
+*Why:* the containerised pipeline deletes the whole submodule directory before refreshing it
+(`build-arc42.sh:57-60`), and it checks out `master` and pulls rather than building the recorded
+commit (`:69`). The first loses uncommitted translations, the second makes two runs of the same
+generator commit produce different archives.
+
+*Definition of done:* a dirty submodule is never deleted silently; the built commit is recorded in
+the build log.
+
+=== US-15 Refuse to wipe a dirty submodule (Should)
+
+As a translator I want my uncommitted work to survive a build, so that a colleague's release does
+not destroy it.
+
+[source,gherkin]
+----
+Scenario: A dirty submodule stops the refresh
+  Given uncommitted changes in arc42-template
+  When the containerised build starts
+  Then the build stops with a message naming the changed files
+  And no file is deleted
+----
+
+Depends on: none. Closes R-3.
+
+=== US-16 Build the pinned submodule commit (Could)
+
+As a release maintainer I want the build to use the recorded submodule commit, so that the same
+generator commit always produces the same archives.
+
+Updating the pin becomes an explicit, separate step.
+
+Evidence: `build-arc42.sh:69`. Closes R-4.
+
+== Not in the backlog
+
+* *Hardening against hostile template content.* Deliberately accepted, see ADR-006. Revisit only
+if the build becomes a hosted service or content arrives from unreviewed sources.
+* *Two-dimensional parallelism.* The 20-minute budget (team answer) is not under pressure — the
+build takes 17.4 s. Tracked as R-6, not scheduled.
+* *PDF output.* Named as desirable in the old requirements (`docs/arc42-requirements.adoc:142`),
+never configured. Needs a product decision first.
