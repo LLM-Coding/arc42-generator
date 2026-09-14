@@ -58,8 +58,18 @@ jobs:
       - name: Generate site
         run: ./dtcw4 local generateSite
 
-      - name: Fail if the landing page is missing
-        run: test -s build/docs/microsite/output/index.html
+      # generateSite reports success even when the landing page template fails
+      # to parse - it then writes an index.html without any landing content.
+      # Check for the content, not just for the file.
+      - name: Fail if the landing page is missing or empty
+        run: |
+          index=build/docs/microsite/output/index.html
+          test -s "$index"
+          grep -q 'dtc-landing' "$index" || {
+            echo "::error::index.html carries no landing page content -" \
+                 "the template in docs/site/doc/ probably failed to parse."
+            exit 1
+          }
 
       - name: Upload site as build artifact
         uses: actions/upload-artifact@v4
