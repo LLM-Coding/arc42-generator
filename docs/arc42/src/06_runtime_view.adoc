@@ -8,7 +8,7 @@ precedes every containerised run.
 
 === Full build
 
-[plantuml,06_full_build,svg]
+[plantuml,06_full_build,svg,opts=inline]
 ....
 @startuml
 actor Maintainer
@@ -49,7 +49,7 @@ Counters are incremented inside a `synchronized(this)` block (`:433`).
 
 === A conversion fails
 
-[plantuml,06_failure,svg]
+[plantuml,06_failure,svg,opts=inline]
 ....
 @startuml
 participant "Converter.convertAll" as A
@@ -80,7 +80,7 @@ The multi-page path is quieter still: a failing Pandoc call there only prints a 
 
 === Submodule refresh
 
-[plantuml,06_submodule,svg]
+[plantuml,06_submodule,svg,opts=inline]
 ....
 @startuml
 participant "build-arc42.sh" as S

@@ -51,3 +51,16 @@ microsite.menu = [
         specs        : '-',
         doc          : '-',
 ]
+
+// === diagrams ===============================================================
+// Rendered remotely by Kroki, so no local PlantUML or Graphviz is needed --
+// neither on a developer machine nor on the CI runner.
+asciidoctorAttributes = [
+        'diagram-server-url' : 'https://kroki.io/',
+        'diagram-server-type': 'kroki_io',
+]
+// Note: the diagram blocks carry opts=inline. Kroki decides who renders a
+// diagram, not where the result is stored: asciidoctor-diagram still writes a
+// file. In the microsite that file lands in the site root (output/images/)
+// while a page one level down references ./images/, so every diagram 404s.
+// Inline SVG removes the file, and with it the mismatch.
