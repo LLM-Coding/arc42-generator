@@ -3,202 +3,22 @@ ifndef::imagesdir[:imagesdir: ../images]
 [[section-design-decisions]]
 == Architecture Decisions
 
-Seven decisions shape this build. Each is recorded in Nygard form and scored with a three-point
-Pugh matrix (`+1` better, `0` equal, `-1` worse) against the quality goals of chapter 1.2 and the
-maintenance effort. The baseline column is the option that was in place at the time.
+Seven decisions shape this build. Each is recorded in Nygard form as its own file under
+`docs/specs/adrs/` and scored with a three-point Pugh matrix (`+1` better, `0` equal, `-1` worse)
+against the quality goals of chapter 1.2 and the maintenance effort. The baseline column is the
+option that was in place at the time.
 
-[[ADR-001]]
-=== ADR-001: A plain Groovy script replaces Gradle
+include::../../specs/adrs/arc42-generator-adr-001-groovy-instead-of-gradle.adoc[leveloffset=+2]
 
-*Status:* accepted (implemented; the Gradle files are gone)
+include::../../specs/adrs/arc42-generator-adr-002-language-auto-discovery.adoc[leveloffset=+2]
 
-*Context:* the previous build used Gradle in a two-pass construction — the first pass generated
-the build scripts for the second. That indirection, not the runtime, drove the complexity: a
-contributor had to understand generated build logic before changing anything.
+include::../../specs/adrs/arc42-generator-adr-003-docbook-pivot-format.adoc[leveloffset=+2]
 
-*Decision:* drop Gradle. `build.groovy` loads four classes and runs four phases; there is no
-build tool and nothing is generated (`build.groovy:101-123`, `:129-202`).
+include::../../specs/adrs/arc42-generator-adr-004-parallelism-over-templates.adoc[leveloffset=+2]
 
-*Consequences:* the pipeline is readable end to end and starts without build-tool overhead —
-17.4 s instead of roughly 90 s (`TEST-REPORT.md:365`). In exchange the project loses Gradle's
-dependency management and incremental build; dependencies are now resolved by Grape at script
-start (`lib/Converter.groovy:3-5`), which is <<R-5>>. A leftover script still rewrites the deleted
-Gradle files (`switchToreq42.sh:1-12`), which is <<TD-4>>.
+include::../../specs/adrs/arc42-generator-adr-005-docker-only-environment.adoc[leveloffset=+2]
 
-[cols="2,1,1,1",options="header"]
-|===
-|Criterion |Gradle two-pass (baseline) |Gradle single-pass |Plain Groovy script
+include::../../specs/adrs/arc42-generator-adr-006-accept-security-risk.adoc[leveloffset=+2]
 
-|QG-2 Maintainability |0 |+1 |+1
-|QG-4 Performance |0 |0 |+1
-|Dependency management |0 |0 |-1
-|Migration effort |0 |-1 |-1
-|*Sum* |*0* |*0* |*0*
-|===
+include::../../specs/adrs/arc42-generator-adr-007-golden-master-separate-repository.adoc[leveloffset=+2]
 
-The matrix ties. Maintainability broke the tie, because it is the goal the two-pass construction
-hurt most directly.
-
-[[ADR-002]]
-=== ADR-002: Languages are discovered, not configured
-
-*Status:* accepted
-
-*Context:* translations arrive from the community. A configuration list means every new language
-needs a commit in this repository, by someone who may not be involved in the translation.
-
-*Decision:* a directory in the Golden Master whose name matches `/^[A-Z]{2,}$/` is a language
-(`lib/Templates.groovy:38`, mirrored for the generated tree at `lib/Discovery.groovy:62`).
-
-*Consequences:* adding a language costs nothing here (R-1). The price is an implicit contract:
-a directory named `EN-draft` is invisible, a directory named `DIST` would be mistaken for a
-language, and the rule lives in two places that must stay in step.
-
-[cols="2,1,1,1",options="header"]
-|===
-|Criterion |Explicit list (baseline) |Regex discovery |Manifest file in the Golden Master
-
-|QG-2 Maintainability |0 |+1 |+1
-|QG-3 Functional suitability |0 |0 |+1
-|Predictability |0 |-1 |+1
-|Effort in the template repository |0 |0 |-1
-|*Sum* |*0* |*0* |*+2*
-|===
-
-The manifest scores higher but was not chosen: it would put build metadata into the content
-repository, against <<ADR-007>>.
-
-[[ADR-003]]
-=== ADR-003: DocBook is the pivot format
-
-*Status:* accepted
-
-*Context:* 17 output formats from one AsciiDoc source. A direct converter per format is 17 code
-paths to maintain.
-
-*Decision:* HTML and AsciiDoc are produced directly; everything else goes AsciiDoc -> DocBook ->
-Pandoc (`lib/Converter.groovy:60-71`).
-
-*Consequences:* one well-supported pivot carries all remaining formats, and a new format is a
-table entry plus a dispatch branch. The cost is a second rendering step that can lose fidelity,
-plus an extra image copy into the DocBook directory (`lib/Converter.groovy:157-169`).
-
-[cols="2,1,1,1",options="header"]
-|===
-|Criterion |Direct converter per format (baseline) |DocBook pivot |HTML pivot
-
-|QG-2 Maintainability |0 |+1 |+1
-|QG-3 Functional suitability |0 |+1 |-1
-|Output fidelity |0 |-1 |-1
-|Speed |0 |-1 |0
-|*Sum* |*0* |*0* |*-1*
-|===
-
-[[ADR-004]]
-=== ADR-004: Parallelism over templates only
-
-*Status:* accepted
-
-*Context:* the work is 18 templates times 17 formats. Both loops could run concurrently.
-
-*Decision:* a GPars pool sized to the available processors runs the template loop; the format
-loop inside stays sequential (`lib/Converter.groovy:429-432`). Packaging parallelises over
-(template, format) pairs instead (`lib/Packager.groovy:130-131`).
-
-*Consequences:* the speed-up is capped by the number of templates, not by cores, and all workers
-share one Asciidoctor instance (`lib/Converter.groovy:33`) and one lock for the progress counter
-(`:433`). Within the 20-minute budget this is ample — see <<QS-04>>; beyond it, <<R-6>>.
-
-[cols="2,1,1,1",options="header"]
-|===
-|Criterion |Sequential (baseline) |Parallel over templates |Parallel over both loops
-
-|QG-4 Performance |0 |+1 |+1
-|QG-1 Reliability |0 |0 |-1
-|QG-2 Maintainability |0 |0 |-1
-|Debuggability |0 |-1 |-1
-|*Sum* |*0* |*0* |*-2*
-|===
-
-[[ADR-005]]
-=== ADR-005: Docker is the only supported environment
-
-*Status:* accepted
-
-*Context:* the build needs a JRE, Groovy, Pandoc and cmark in matching versions. Asking every
-contributor to install them invites version drift and unreproducible output.
-
-*Decision:* one image pins all of them; `docker compose up` is the supported entry point
-(`Dockerfile:13-26`, `docker-compose.yml:9`, `README.adoc:17`).
-
-*Consequences:* output is reproducible across hosts and the Grape cache ships inside the image,
-so no dependency is fetched at build time (`Dockerfile:40-45`). The price is Docker as a hard
-prerequisite and an image that must be rebuilt whenever a tool version moves.
-
-[cols="2,1,1,1",options="header"]
-|===
-|Criterion |Local toolchain (baseline) |Docker image |SDKMAN-scripted local setup
-
-|QG-3 Functional suitability |0 |+1 |0
-|Reproducibility |0 |+1 |0
-|Entry barrier |0 |-1 |+1
-|QG-2 Maintainability |0 |0 |-1
-|*Sum* |*0* |*+1* |*0*
-|===
-
-[[ADR-006]]
-=== ADR-006: Security risk is accepted, not mitigated
-
-*Status:* accepted
-
-*Context:* Asciidoctor runs with `SafeMode.UNSAFE`, downloads carry no checksum, and Git ownership
-checks are off inside the image. A threat model would name five threats (<<concept-threat-model>>).
-
-*Decision:* accept T-001 to T-005. Input and output are public content, the build runs on
-maintainer machines, there is no user data and no exposed service. `SafeMode.UNSAFE` stays; it was
-chosen for convenience, and whether a stricter mode would also work has never been tested.
-
-*Consequences:* no hardening work, and no security review blocking a release. The decision is
-bound to its context: a hosted build service, signed releases, or content from unreviewed sources
-invalidate it and turn the accepted threats into findings.
-
-[cols="2,1,1,1",options="header"]
-|===
-|Criterion |Accept (baseline) |Stricter SafeMode |Checksums plus pinned submodule commit
-
-|Effort |0 |-1 |-1
-|Risk reduction |0 |+1 |+1
-|QG-3 Functional suitability |0 |-1 |0
-|QG-1 Reliability |0 |0 |+1
-|*Sum* |*0* |*-1* |*+1*
-|===
-
-The third option scores higher and is the natural first step should the context change.
-
-[[ADR-007]]
-=== ADR-007: The Golden Master stays a separate repository
-
-*Status:* accepted
-
-*Context:* content and build logic have different audiences. Translators must not need build
-knowledge; release engineers must not wade through translations.
-
-*Decision:* two repositories. This one holds build logic and configuration, `arc42-template`
-holds only content, consumed as a Git submodule
-(`docs/arc42_build_process_requirements.md:86-104`, `.gitmodules:1-6`).
-
-*Consequences:* clean separation of concerns, and the same build can serve further templates such
-as req42. The price is submodule handling in every workflow, and a distribution directory that
-lives inside the content repository, so releasing means committing there
-(`buildconfig.groovy:38`, <<R-7>>).
-
-[cols="2,1,1,1",options="header"]
-|===
-|Criterion |Single repository (baseline) |Two repositories, submodule |Two repositories, scripted clone
-
-|Separation of concerns |0 |+1 |+1
-|QG-2 Maintainability |0 |+1 |+1
-|Workflow simplicity |0 |-1 |0
-|Version pinning |0 |+1 |0
-|*Sum* |*0* |*+2* |*+2*
-|===

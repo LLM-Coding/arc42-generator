@@ -54,7 +54,7 @@ image referenced by a `with-help` Markdown file exists.
 
 Success is measured by release effort, not by downloads.
 The generator has done its job when a maintainer produces a complete template release without
-handwork and without special knowledge (see `OPEN_QUESTIONS-arc42-generator.adoc`, Q1.5.3).
+handwork and without special knowledge (team answer).
 
 === Quality Goals
 
@@ -69,7 +69,7 @@ characteristics as derived scenarios.
 |QG-1
 |Reliability
 |A build that silently drops a chapter, or reports success although conversions failed, damages
-every downstream download. This outranks build speed (Q4.9).
+every downstream download. This outranks build speed (team answer).
 |<<QS-01>>
 
 |QG-2
@@ -87,7 +87,7 @@ failed build.
 |QG-4
 |Performance Efficiency
 |Speed is an achieved side goal, not the top one. The budget is generous: a full build may take
-up to 20 minutes (Q5.5.5), today it takes 17.4 s.
+up to 20 minutes (team answer), today it takes 17.4 s.
 |<<QS-04>>
 |===
 

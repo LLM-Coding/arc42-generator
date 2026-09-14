@@ -1,0 +1,27 @@
+ifndef::imagesdir[:imagesdir: ../../arc42/images]
+
+[[ADR-004]]
+= ADR-004: Parallelism over templates only
+
+*Status:* accepted
+
+*Context:* the work is 18 templates times 17 formats. Both loops could run concurrently.
+
+*Decision:* a GPars pool sized to the available processors runs the template loop; the format
+loop inside stays sequential (`lib/Converter.groovy:429-432`). Packaging parallelises over
+(template, format) pairs instead (`lib/Packager.groovy:130-131`).
+
+*Consequences:* the speed-up is capped by the number of templates, not by cores, and all workers
+share one Asciidoctor instance (`lib/Converter.groovy:33`) and one lock for the progress counter
+(`:433`). Within the 20-minute budget (team answer) this is ample — see <<QS-04>>; beyond it, <<R-6>>.
+
+[cols="2,1,1,1",options="header"]
+|===
+|Criterion |Sequential (baseline) |Parallel over templates |Parallel over both loops
+
+|QG-4 Performance |0 |+1 |+1
+|QG-1 Reliability |0 |0 |-1
+|QG-2 Maintainability |0 |0 |-1
+|Debuggability |0 |-1 |-1
+|*Sum* |*0* |*0* |*-2*
+|===

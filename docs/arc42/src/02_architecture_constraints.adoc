@@ -55,7 +55,7 @@ submodule.
 
 |C-O-3
 |Feature branch off main, Conventional Commits, pull request — binding for all new
-contributions, not technically enforced (Q3.2.2.5).
+contributions, not technically enforced (team answer).
 |`CLAUDE.md:350`, `:356`
 
 |C-O-4

@@ -82,7 +82,7 @@ descriptor table `:382-398`; procedure documented at `CLAUDE.md:170-181`.
 |Artifact |Conversion and packaging phases
 |Environment |Developer machine, parallelism enabled
 |Response |The build completes without manual intervention
-|Response Measure |Budget 20 minutes (Q5.5.5). Measured: 17.4 s end to end, of which 10.7 s
+|Response Measure |Budget 20 minutes (team answer). Measured: 17.4 s end to end, of which 10.7 s
 template generation and 0.6 s packaging (`TEST-REPORT.md:365`, `:102`, `:274`) — more than two
 orders of magnitude inside the budget.
 |===

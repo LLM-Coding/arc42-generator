@@ -9,7 +9,7 @@ include::src/config.adoc[]
 = image:arc42-logo.png[arc42] Architecture Documentation: arc42-generator
 :revnumber: 1.0
 :revdate: 2026-09-14
-:revremark: synthesized from QUESTION_TREE-arc42-generator.adoc (phase 2)
+:revremark: recovered from the code; team answers marked in the text
 :toc-title: Table of Contents
 
 //additional style for arc42 help callouts

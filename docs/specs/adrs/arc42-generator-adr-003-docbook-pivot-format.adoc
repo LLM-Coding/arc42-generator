@@ -1,0 +1,27 @@
+ifndef::imagesdir[:imagesdir: ../../arc42/images]
+
+[[ADR-003]]
+= ADR-003: DocBook is the pivot format
+
+*Status:* accepted
+
+*Context:* 17 output formats from one AsciiDoc source. A direct converter per format is 17 code
+paths to maintain.
+
+*Decision:* HTML and AsciiDoc are produced directly; everything else goes AsciiDoc -> DocBook ->
+Pandoc (`lib/Converter.groovy:60-71`).
+
+*Consequences:* one well-supported pivot carries all remaining formats, and a new format is a
+table entry plus a dispatch branch. The cost is a second rendering step that can lose fidelity,
+plus an extra image copy into the DocBook directory (`lib/Converter.groovy:157-169`).
+
+[cols="2,1,1,1",options="header"]
+|===
+|Criterion |Direct converter per format (baseline) |DocBook pivot |HTML pivot
+
+|QG-2 Maintainability |0 |+1 |+1
+|QG-3 Functional suitability |0 |+1 |-1
+|Output fidelity |0 |-1 |-1
+|Speed |0 |-1 |0
+|*Sum* |*0* |*0* |*-1*
+|===

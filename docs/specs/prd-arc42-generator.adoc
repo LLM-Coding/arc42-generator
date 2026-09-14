@@ -1,0 +1,168 @@
+= Product Requirements: arc42-generator
+:toc: left
+:toclevels: 3
+:sectnums:
+:revnumber: 1.0
+:revdate: 2026-09-14
+
+Status:: Recovered, not newly invented. This PRD describes the product as the code defines it
+today, so that new work has a stated baseline to argue against. Facts that only the team could
+supply are marked (team answer).
+
+== The problem
+
+The arc42 template is maintained once and consumed in a dozen shapes.
+Its content lives as AsciiDoc in the `arc42-template` repository; its readers want Word, Markdown,
+HTML, LaTeX, EPUB and more, in their own language, with or without the embedded help texts.
+
+Producing those combinations by hand is impossible: eleven languages, two flavors and seventeen
+formats are almost four hundred artifacts, and every content change invalidates all of them.
+Without automation, either the template stops being updated or most formats fall behind.
+
+== Goals
+
+[cols="1,4",options="header"]
+|===
+|ID |Goal
+
+|G-1
+|One source, every shape: each language of the Golden Master is published in every supported
+format and both flavors.
+
+|G-2
+|A release costs one command. No handwork, no special knowledge, no per-format ritual.
+
+|G-3
+|Content contributors never touch the build. A new translation is picked up because it exists,
+not because someone registered it.
+
+|G-4
+|The output is trustworthy: what the build reports as done is complete and valid.
+|===
+
+G-4 is where the product falls short today, and it is the first goal of the current backlog
+(see chapter 11 of the architecture documentation, risks R-1 to R-3).
+
+== Personas
+
+[cols="1,2,3",options="header"]
+|===
+|Persona |Who they are |What they need from this product
+
+|*Rita, release maintainer*
+|arc42 core committer, does this beside her actual job, a few times a year
+|One command that produces everything, and a clear signal whether it worked. She must not have to
+read the build to find out that three chapters are missing.
+
+|*Tomás, translator*
+|Community contributor, maintains the Portuguese template, knows AsciiDoc, not Groovy
+|That his new directory shows up in the next release without anyone changing build code, and that
+his language is not silently dropped.
+
+|*Dana, generator developer*
+|Occasional contributor to this repository, adds a format or fixes a bug
+|A pipeline she can read in an afternoon, a documented place to add a format, and a test suite
+that tells her what she broke.
+
+|*Anonymous template user*
+|Architect or developer downloading from arc42.org
+|A complete, current archive in the chosen format and language. Never sees this repository.
+|===
+
+== Success criteria
+
+[cols="1,3,2",options="header"]
+|===
+|ID |Criterion |Measure today
+
+|S-1
+|Release effort: a maintainer produces a full release without handwork.
+|One command produces all archives (`docker-compose.yml:9`); the final push into the content
+repository is still manual (`build-arc42.sh:198-205`).
+
+|S-2
+|Completeness: every discovered language appears in both flavors and all formats.
+|languages x 2 x 17, printed by the build (`build.groovy:220-223`); last measured 18 templates
+from nine languages (`TEST-REPORT.md:119`).
+
+|S-3
+|Honesty: a failed conversion is visible in the result, not only in the log.
+|*Not met.* The process exits 0 regardless (`build.groovy:211-215`).
+
+|S-4
+|Cost of a new language: zero changed files in this repository.
+|Met (`lib/Templates.groovy:37-40`).
+
+|S-5
+|Build duration stays inside the budget of 20 minutes.
+|Met with room to spare: 17.4 s (`TEST-REPORT.md:365`).
+|===
+
+Downloads are deliberately not a success metric; nobody counts them and no target exists
+(team answer).
+
+== Scope
+
+*In scope*
+
+* Generating both flavors from the Golden Master, for every discovered language.
+* Converting to the seventeen configured formats, single-page and multi-page.
+* Packaging one ZIP per language, flavor and format into the content repository's `dist/`.
+* Post-build validation of generated Markdown and of image references.
+* Running the same pipeline locally in Docker and in GitHub Codespaces.
+
+*Out of scope*
+
+* The template content itself. What a chapter says is decided in the content repository by the
+arc42 founders.
+* Publishing. Uploading to arc42.org and announcing a release happen outside this product.
+* Rendering PDF. No PDF format is configured today (`buildconfig.groovy:17-35`), although the
+requirements list it as desirable (`docs/arc42-requirements.adoc:142`).
+* Hardening against hostile template content. Deliberately accepted, see ADR-006.
+
+*Explicitly deferred*
+
+* The `with-examples` flavor. The feature flag exists, the content does not: `arc42example`
+appears zero times in the Golden Master (technical debt TD-1).
+* req42 support. The switch script still targets the removed Gradle build (TD-4).
+
+== Constraints
+
+[cols="1,4",options="header"]
+|===
+|ID |Constraint
+
+|K-1
+|Docker is the only supported execution environment; local execution is explicitly unsupported
+(`README.adoc:17`, `:19`).
+
+|K-2
+|Only open-source tooling may be required
+(`docs/arc42_build_process_requirements.md:190-199`).
+
+|K-3
+|Build logic and template content live in separate repositories; the content is consumed as a Git
+submodule (`docs/arc42_build_process_requirements.md:86-104`, `.gitmodules:1-6`).
+
+|K-4
+|Releases are cut by hand: build, inspect, then commit and push inside the content repository
+(`build-arc42.sh:198-205`).
+
+|K-5
+|A full build may take up to 20 minutes (team answer).
+
+|K-6
+|Contributions follow feature branch, Conventional Commits and pull request; the rule is binding
+but not technically enforced (team answer).
+
+|K-7
+|Security is deliberately subordinate: the threats the build is exposed to are accepted rather
+than mitigated (team answer, see ADR-006).
+|===
+
+== Open questions
+
+None. All questions raised during the recovery were answered by the team; no item is deferred.
+The next decisions are backlog items rather than open questions: whether the `example` feature and
+the req42 switch script are removed or revived, and whether the manual release step is
+automated once a pipeline exists.

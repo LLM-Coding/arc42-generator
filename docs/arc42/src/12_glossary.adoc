@@ -14,7 +14,7 @@ repository and consumed here as a submodule (`buildconfig.groovy:2-3`, <<ADR-007
 |Flavor / style
 |A named subset of features to keep. `plain` keeps none, `with-help` keeps `help`; everything not
 kept is stripped (`buildconfig.groovy:10-15`). *Vocabulary warning:* the code says `style`, the
-README and the requirements say `flavour`, and `docs/arc42-requirements.adoc:171` calls the plain
+README and the requirements say `flavour`, and `docs/arc42-requirements.adoc:172` calls the plain
 variant `Skeleton`. Three names, one concept.
 
 |Feature

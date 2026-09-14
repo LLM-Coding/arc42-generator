@@ -1,0 +1,27 @@
+ifndef::imagesdir[:imagesdir: ../../arc42/images]
+
+[[ADR-005]]
+= ADR-005: Docker is the only supported environment
+
+*Status:* accepted
+
+*Context:* the build needs a JRE, Groovy, Pandoc and cmark in matching versions. Asking every
+contributor to install them invites version drift and unreproducible output.
+
+*Decision:* one image pins all of them; `docker compose up` is the supported entry point
+(`Dockerfile:13-26`, `docker-compose.yml:9`, `README.adoc:17`).
+
+*Consequences:* output is reproducible across hosts and the Grape cache ships inside the image,
+so no dependency is fetched at build time (`Dockerfile:40-45`). The price is Docker as a hard
+prerequisite and an image that must be rebuilt whenever a tool version moves.
+
+[cols="2,1,1,1",options="header"]
+|===
+|Criterion |Local toolchain (baseline) |Docker image |SDKMAN-scripted local setup
+
+|QG-3 Functional suitability |0 |+1 |0
+|Reproducibility |0 |+1 |0
+|Entry barrier |0 |-1 |+1
+|QG-2 Maintainability |0 |0 |-1
+|*Sum* |*0* |*+1* |*0*
+|===

@@ -74,8 +74,8 @@ push leaves the download page stale, and there is no pipeline to catch it.
 |ID |Debt |Evidence |Effort
 
 |[[TD-1]]TD-1
-|The `example` feature is declared and never used. A check of the Golden Master found
-`arc42example` zero times against 995 occurrences of `arc42help` in 168 files, so the feature
+|The `example` feature is declared and never used (team answer). A check of the Golden Master
+found `arc42example` zero times against 995 occurrences of `arc42help` in 168 files, so the feature
 regex runs over every file on every build and never matches. The `with-examples` flavor has been
 commented out with "no content yet" ever since.
 |`buildconfig.groovy:7`, `:13-14`, `lib/Templates.groovy:80`
