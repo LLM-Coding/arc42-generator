@@ -1,0 +1,109 @@
+ifndef::imagesdir[:imagesdir: ../images]
+
+[[section-context-and-scope]]
+== Context and Scope
+
+The generator sits between one content repository and one distribution directory.
+Everything else it touches is a tool it calls.
+
+=== Business Context
+
+[plantuml,03_business_context,svg]
+....
+@startuml
+!include <C4/C4_Context.puml>
+
+Person(maintainer, "Release maintainer", "arc42 core committer")
+Person(translator, "Translator", "community contributor")
+Person(user, "Template user", "architect, developer")
+
+System(generator, "arc42-generator", "Builds every template variant from the Golden Master")
+System_Ext(goldenmaster, "arc42-template repository", "AsciiDoc Golden Master and dist/ archives")
+System_Ext(site, "arc42.org/download", "Public download page")
+
+Rel(translator, goldenmaster, "contributes a translation")
+Rel(maintainer, generator, "starts the build")
+Rel(generator, goldenmaster, "reads the Golden Master, writes dist/*.zip")
+Rel(maintainer, goldenmaster, "commits and pushes the archives")
+Rel(site, goldenmaster, "links the archives")
+Rel(user, site, "downloads a template")
+@enduml
+....
+
+[cols="1,2,2",options="header"]
+|===
+|Partner |Input |Output
+
+|arc42-template repository
+|AsciiDoc sources per language, images, `version.properties`, shared `common/` files
+(`lib/Templates.groovy:194`, `:213`, `:231-234`)
+|ZIP archives in `dist/`, one per language, flavor and format (`buildconfig.groovy:38`)
+
+|Release maintainer
+|The decision to build, optionally a phase and a format filter (`build.groovy:16-21`)
+|Console log with counts and durations; the release instructions printed at the end
+(`build-arc42.sh:198-205`)
+
+|Translator
+|A new language directory matching `/^[A-Z]{2,}$/` in the Golden Master
+|Their language appears in the next build without any change here (`lib/Templates.groovy:38`)
+|===
+
+=== Technical Context
+
+[plantuml,03_technical_context,svg]
+....
+@startuml
+!include <C4/C4_Container.puml>
+
+Person(maintainer, "Release maintainer")
+
+System_Boundary(c, "Build host or container") {
+  Container(build, "build.groovy + lib/", "Groovy 5, JVM 21", "Pipeline orchestrator")
+  Container(asciidoctor, "AsciidoctorJ 2.5.10", "in-process library", "AsciiDoc to HTML and DocBook")
+  Container(pandoc, "Pandoc 3.7.0.2", "external process", "DocBook to every other format")
+  Container(cmark, "cmark", "external process", "CommonMark validation")
+  ContainerDb(fs, "Working tree", "file system", "build/src_gen, build/<LANG>/<FORMAT>, dist/")
+}
+
+System_Ext(git, "GitHub", "Golden Master submodule, Pandoc release")
+
+Rel(maintainer, build, "docker compose up / groovy build.groovy")
+Rel(build, asciidoctor, "Asciidoctor.Factory.create(), convertFile()")
+Rel(build, pandoc, "ProcessBuilder, UTF-8 environment")
+Rel(build, fs, "reads and writes")
+Rel(build, git, "submodule update, checkout master, pull")
+Rel(build, cmark, "validates generated Markdown")
+@enduml
+....
+
+[cols="1,2,3",options="header"]
+|===
+|Interface |Technical form |Evidence
+
+|Golden Master
+|Read-only file access below the configured source path, refreshed by Git before each
+containerised build
+|`buildconfig.groovy:3`, `lib/Templates.groovy:31`, `build-arc42.sh:68-69`
+
+|AsciidoctorJ
+|In-process library call, one shared instance per `Converter`, `SafeMode.UNSAFE`
+|`lib/Converter.groovy:33`, `:100`, `:106`
+
+|Pandoc
+|Child process with an explicit argument vector, working directory set to the DocBook output
+directory, `LC_ALL` and `LANG` forced to UTF-8
+|`lib/Converter.groovy:181-187`, `:208-217`
+
+|cmark
+|Child process per generated Markdown file of `build/EN/markdown`
+|`build-arc42.sh:94-104`
+
+|Package installation
+|`wget` plus `dpkg -i` as root when Pandoc is absent — the one place the build modifies its host
+|`build-arc42.sh:39-41`
+
+|Distribution
+|Write access into the submodule's `dist/` directory
+|`buildconfig.groovy:38`, `lib/Packager.groovy:84-86`
+|===

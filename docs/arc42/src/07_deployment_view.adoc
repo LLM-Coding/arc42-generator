@@ -1,0 +1,67 @@
+ifndef::imagesdir[:imagesdir: ../images]
+
+[[section-deployment-view]]
+== Deployment View
+
+=== Infrastructure Level 1
+
+[plantuml,07_deployment,svg]
+....
+@startuml
+!include <C4/C4_Deployment.puml>
+
+Deployment_Node(host, "Build host", "Linux, macOS, Windows or GitHub Codespaces") {
+  Deployment_Node(docker, "Docker Engine", "container runtime") {
+    Deployment_Node(img, "arc42-generator:9.1.0", "Alpine 3.20") {
+      Container(groovy, "Groovy 5.0.3 + JRE 21", "runtime", "Runs build.groovy and lib/")
+      Container(pandoc, "Pandoc 3.7.0.2", "binary", "DocBook to target formats")
+      Container(cmark, "cmark", "binary", "CommonMark validation")
+      Container(grapes, "Grape cache", "/root/.groovy", "AsciidoctorJ, GPars, pre-populated")
+    }
+  }
+  Deployment_Node(mount, "/workspace", "bind mount of the repository") {
+    ContainerDb(tree, "Working tree", "file system", "arc42-template/, build/, dist/")
+  }
+}
+
+Rel(groovy, tree, "reads and writes")
+Rel(groovy, pandoc, "child process")
+Rel(groovy, cmark, "child process")
+@enduml
+....
+
+_Motivation:_ every tool version is fixed in one image, so a build behaves the same on any host
+and no developer has to install Java, Groovy or Pandoc (`README.adoc:113`).
+
+_Mapping:_ the repository is bind-mounted at `/workspace`, the working directory is `/workspace`,
+and the container command is `./build-arc42.sh` (`docker-compose.yml:4-9`, `Dockerfile:82`).
+
+=== Infrastructure Level 2
+
+==== Builder stage
+
+Installs the JRE, bash, git, wget, unzip, Pandoc and cmark from the Alpine repositories, unpacks
+Groovy 5.0.3, then pre-populates the Grape cache and strips source and javadoc JARs from it
+(`Dockerfile:13-20`, `:23-26`, `:40-45`).
+
+==== Runtime stage
+
+A second Alpine stage with runtime packages only. Groovy and the Grape cache are copied from the
+builder; only `build.groovy`, `buildconfig.groovy`, `init-groovy-deps.groovy`, `build-arc42.sh`
+and `lib/` are copied in (`Dockerfile:53-58`, `:64-68`, `:78-79`).
+
+Consequence: the test scripts are not in the image, so `run-all-tests.groovy` cannot run inside
+the runtime container (`Dockerfile:78-79` against `run-all-tests.groovy:22-36`). See <<TD-5>>.
+
+==== GitHub Codespaces
+
+The devcontainer declares write permission on `arc42/arc42-template`, because the release step
+pushes archives into that repository (`.devcontainer/devcontainer.json:4-9`).
+Git ownership checks are disabled inside the image so bind-mounted trees work
+(`Dockerfile:61`, narrower variant at `build-arc42.sh:52-53`).
+
+==== Local execution without Docker
+
+Technically possible — Groovy 4+, a JRE 11+ and Pandoc 3+ suffice (`CLAUDE.md:126-132`) — but
+explicitly unsupported (`README.adoc:19`). Grape then resolves AsciidoctorJ and GPars over the
+network at script start (`lib/Converter.groovy:3-5`), which the container avoids.

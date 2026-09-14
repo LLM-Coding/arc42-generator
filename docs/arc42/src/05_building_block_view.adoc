@@ -1,0 +1,168 @@
+ifndef::imagesdir[:imagesdir: ../images]
+
+[[section-building-block-view]]
+== Building Block View
+
+=== Whitebox Overall System
+
+The orchestrator owns the sequence; four classes own one pipeline stage each.
+`build.groovy` loads them by file name through a `GroovyClassLoader` and passes each one the
+parsed configuration (`build.groovy:101-123`).
+
+[plantuml,05_level1,svg]
+....
+@startuml
+!include <C4/C4_Component.puml>
+
+Container_Boundary(gen, "arc42-generator") {
+  Component(orch, "build.groovy", "Groovy script", "Parses CLI arguments, loads config and classes, runs four guarded phases")
+  Component(templates, "Templates", "Groovy class", "Golden Master to flavored AsciiDoc")
+  Component(discovery, "Discovery", "Groovy class", "Scans generated tree, builds metadata, memoises")
+  Component(converter, "Converter", "Groovy class", "AsciidoctorJ and Pandoc conversion, parallel")
+  Component(packager, "Packager", "Groovy class", "ZIP archives, parallel")
+  ComponentDb(config, "buildconfig.groovy", "ConfigSlurper script", "Flavors, formats, paths")
+}
+
+Rel(orch, config, "parses")
+Rel(orch, templates, "createFromGoldenMaster()")
+Rel(orch, discovery, "discoverTemplates()")
+Rel(orch, converter, "convertAll(templates, formats, parallel)")
+Rel(orch, packager, "createAllDistributions(...)")
+Rel(discovery, converter, "List<Map> template metadata")
+@enduml
+....
+
+==== build.groovy
+
+_Purpose:_ single entry point. Parses the phase, the format filter and the parallel switch, loads
+`buildconfig.groovy` through `ConfigSlurper`, instantiates the four classes and runs the phases
+that the argument selects.
+
+_Interface:_ `groovy build.groovy [templates|convert|distribution|all] [--format=X]
+[--parallel=false]` (`build.groovy:16-21`, `:45-52`).
+
+_Quality note:_ an unrecognised phase matches no guard and the script still prints
+"BUILD SUCCESSFUL" — see <<TD-3>>.
+
+==== Templates
+
+_Purpose:_ turns the Golden Master into flavored AsciiDoc below `build/src_gen/`.
+
+_Responsibilities:_ discover languages by regex (`lib/Templates.groovy:30-48`), remove unwanted
+features (`:75-90`), rewrite include paths for the flat output layout (`:64-74`), copy images by
+flavor and the shared `common/` tree (`:101-134`, `:177-190`).
+
+_Interface:_ `createFromGoldenMaster()`, plus `discoverLanguages()` and `removeFeatures()` which
+the tests call directly (`test-templates.groovy:21`, `:43`).
+
+==== Discovery
+
+_Purpose:_ finds what phase 1 produced and describes it.
+
+_Responsibilities:_ scan `build/src_gen/`, validate that each style has a `src/` directory with
+`.adoc` files, read `version.properties` as UTF-8, and build one 13-field metadata map per
+template (`lib/Discovery.groovy:43-154`).
+
+_Interface:_ `discoverTemplates()`, the query methods `getLanguages()`, `getStyles()`,
+`findByLanguage()`, `findByStyle()`, `findTemplate()`, and `validate()` (`:168-241`).
+
+==== Converter
+
+_Purpose:_ produces every output format. This is the largest block; see <<level2-converter>>.
+
+_Interface:_ `convertAll(List<Map> templates, List<String> formats, boolean parallel)`
+(`lib/Converter.groovy:410`).
+
+==== Packager
+
+_Purpose:_ one ZIP per (language, flavor, format).
+
+_Responsibilities:_ walk the output directory, write entries with paths relative to it
+(`lib/Packager.groovy:44-52`), normalise the flavor name for the file name so `with-help` becomes
+`withhelp` (`:80`), and write into the distribution directory (`:84-86`).
+
+_Interface:_ `createAllDistributions(...)`, `createDistribution(language, style, format)`,
+`cleanDistributions()`.
+
+==== Interface: template metadata
+
+The one data structure that crosses every stage boundary is an untyped `Map` with 13 keys —
+language, style, sourcePath, srcDir, imagesDir, hasImages, mainFile, mainFileName, adocFileCount,
+commonDir, versionProperties, revnumber (`lib/Discovery.groovy:127-140`).
+There is no DTO and no schema; a renamed key fails at runtime. See <<TD-7>>.
+
+[[level2-converter]]
+=== Level 2: Converter
+
+The format name decides the path. A four-way dispatch chain routes each conversion
+(`lib/Converter.groovy:60-71`).
+
+[plantuml,05_level2_converter,svg]
+....
+@startuml
+!include <C4/C4_Component.puml>
+
+Component_Ext(adoc, "AsciidoctorJ", "library")
+Component_Ext(pandoc, "Pandoc", "process")
+
+Container_Boundary(conv, "Converter") {
+  Component(dispatch, "convertTemplate()", "dispatch", "Four-way chain on the format name")
+  Component(html, "convertToHTML()", "direct", "AsciiDoc to HTML5")
+  Component(copy, "copyAsciidoc()", "direct", "Copies sources, prefixes includes with src/")
+  Component(db, "convertToDocBook()", "pivot", "AsciiDoc to DocBook XML")
+  Component(sp, "convertViaPandoc()", "single page", "DocBook to one output file")
+  Component(mp, "convertViaPandocMP()", "multi page", "One output file per chapter")
+  Component(attrs, "createAttributes()", "factory", "Seven fixed plus three version attributes")
+  Component(table, "getPandocConfig()", "table", "pandocFormat, extension, args per format")
+}
+
+Rel(dispatch, html, "format == html")
+Rel(dispatch, copy, "format == asciidoc")
+Rel(dispatch, db, "format == docbook")
+Rel(dispatch, sp, "everything else")
+Rel(dispatch, mp, "markdownMP, mkdocsMP, markdownMPStrict, gitHubMarkdownMP")
+Rel(sp, db, "produces the pivot")
+Rel(mp, db, "one XML per chapter")
+Rel(html, adoc, "convertFile")
+Rel(db, adoc, "convertFile")
+Rel(sp, pandoc, "ProcessBuilder")
+Rel(mp, pandoc, "ProcessBuilder per chapter")
+Rel(sp, table, "reads")
+Rel(db, attrs, "reads")
+@enduml
+....
+
+==== White Box `convertViaPandoc` (single page)
+
+Derives a sibling `docbook` directory from the output path, converts the template to DocBook
+there, copies the images next to the XML so Pandoc resolves relative paths, then runs Pandoc from
+that directory (`lib/Converter.groovy:151-154`, `:157-170`, `:206-217`).
+A non-zero Pandoc exit raises a `RuntimeException` (`:219-222`).
+
+Two post-processing steps follow: LaTeX thin spaces become ordinary spaces (`:225-228`), and an
+HTML charset tag would be added — a branch that can never run, because `html` is routed to
+AsciidoctorJ one level up. See <<TD-2>>.
+
+==== White Box `convertViaPandocMP` (multi page)
+
+Converts each chapter file separately to DocBook, skipping the main file and `config.adoc`, then
+runs Pandoc once per XML file (`lib/Converter.groovy:303-315`, `:337-346`).
+For `mkdocsMP` it deletes `config.md` and `about-arc42.md` afterwards (`:348`).
+
+Two failures are absorbed here: an AsciidoctorJ exception per chapter is swallowed on purpose, to
+skip config-only files (`:313`), and a failing Pandoc call only prints a warning (`:345`), so a
+failed chapter disappears from the output without any error. See <<R-1>>.
+
+=== Level 3: feature removal
+
+`removeFeatures` is the one place where a flavor becomes what it is
+(`lib/Templates.groovy:75-90`).
+It works in two ways: it deletes `[role="arc42<feature>"]` delimited blocks, and for `help` it
+additionally deletes the `ifdef::arc42help[]` and `endif::arc42help[]` marker lines while keeping
+their body.
+
+The feature list comes from `buildconfig.groovy:7`, the flavor definition from `:10-15`; a flavor
+is a list of features to keep, everything else is subtracted (`lib/Templates.groovy:205`).
+Of the two declared features only `help` exists in the Golden Master: a check of the template
+repository found `arc42example` zero times against 995 occurrences of `arc42help` in 168 files.
+The `example` branch therefore runs a regex over every file that never matches. See <<TD-1>>.

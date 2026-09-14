@@ -1,0 +1,54 @@
+ifndef::imagesdir[:imagesdir: ../images]
+
+[[section-glossary]]
+== Glossary
+
+[cols="1,4",options="header"]
+|===
+|Term |Definition
+
+|Golden Master
+|The authoritative AsciiDoc source of the arc42 template, kept in the separate `arc42-template`
+repository and consumed here as a submodule (`buildconfig.groovy:2-3`, <<ADR-007>>).
+
+|Flavor / style
+|A named subset of features to keep. `plain` keeps none, `with-help` keeps `help`; everything not
+kept is stripped (`buildconfig.groovy:10-15`). *Vocabulary warning:* the code says `style`, the
+README and the requirements say `flavour`, and `docs/arc42-requirements.adoc:171` calls the plain
+variant `Skeleton`. Three names, one concept.
+
+|Feature
+|A markable content class in the Golden Master, written as `[role="arc42<feature>"]` or as an
+`ifdef::arc42<feature>[]` block. Two are declared, `help` and `example`; only `help` exists in the
+content (<<TD-1>>).
+
+|Pivot format
+|DocBook XML, the intermediate every non-HTML, non-AsciiDoc format passes through
+(<<ADR-003>>).
+
+|MP format
+|"Multi-page": one output file per chapter instead of one file per template. Four format names
+carry the suffix: `markdownMP`, `mkdocsMP`, `markdownMPStrict`, `gitHubMarkdownMP`
+(`lib/Converter.groovy:299`).
+
+|Template metadata
+|The 13-field `Map` that Discovery builds per (language, flavor) and that every later stage reads
+(`lib/Discovery.groovy:127-140`).
+
+|Phase
+|One of `templates`, `convert`, `distribution`, `all` — the first CLI argument, selecting which
+part of the pipeline runs (`build.groovy:46`).
+
+|Grape
+|Groovy's dependency mechanism. `@Grab` annotations resolve AsciidoctorJ, the diagram extension
+and GPars at script start; the container pre-populates the cache
+(`lib/Converter.groovy:3-5`, `Dockerfile:40-45`).
+
+|dtcw4
+|The docToolchain v4 wrapper script that renders this documentation. `./dtcw4 local generateHTML`
+builds `build/docs/html5/` from `docs/`.
+
+|Distribution
+|The set of ZIP archives, one per language, flavor and format, written into the content
+repository's `dist/` directory (`lib/Packager.groovy:83`, `buildconfig.groovy:38`).
+|===

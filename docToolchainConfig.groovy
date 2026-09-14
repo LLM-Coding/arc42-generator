@@ -9,6 +9,7 @@ inputFiles = [
         [file: 'QUESTION_TREE-arc42-generator.adoc', formats: ['html']],
         [file: 'OPEN_QUESTIONS-arc42-generator.adoc', formats: ['html']],
         [file: 'arc42-requirements.adoc', formats: ['html']],
+        [file: 'arc42/architecture.adoc', formats: ['html']],
 ]
 
 taskInputsDirs = [:]
