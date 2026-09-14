@@ -106,9 +106,9 @@ the container that the project declares as the only supported environment.
 |small
 
 |[[TD-6]]TD-6
-|No CI configuration exists, although the requirements ask for example GitHub Actions workflows.
-Nothing runs the tests or the build on push.
-|`docs/arc42_build_process_requirements.md:229`; no `.github` directory
+|CI runs the documentation build only (`.github/workflows/documentation.yml`). Nothing runs the
+test suite or the template build on push, although the requirements ask for it.
+|`docs/arc42_build_process_requirements.md:229`
 |medium
 
 |[[TD-7]]TD-7

@@ -1,4 +1,8 @@
 = Socratic Code Theory Recovery: Question Tree — arc42-generator
+:jbake-menu: questiontree
+:jbake-title: Question Tree
+:jbake-type: page
+:jbake-status: published
 :toc: left
 :toclevels: 3
 :sectnums:

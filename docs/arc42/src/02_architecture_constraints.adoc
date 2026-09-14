@@ -59,9 +59,9 @@ contributions, not technically enforced (team answer).
 |`CLAUDE.md:350`, `:356`
 
 |C-O-4
-|No CI pipeline exists, although the requirements ask for example GitHub Actions workflows. Every
-build is started by hand. See <<TD-6>>.
-|`docs/arc42_build_process_requirements.md:229`
+|CI covers the documentation only: one workflow builds and publishes the microsite. The template
+build and the test suite are still started by hand. See <<TD-6>>.
+|`.github/workflows/documentation.yml`, requirement `docs/arc42_build_process_requirements.md:229`
 
 |C-O-5
 |Agent tooling in this repository asks before Bash and Write, and may not read `.env*` or

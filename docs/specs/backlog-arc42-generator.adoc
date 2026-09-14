@@ -1,4 +1,8 @@
 = Backlog: arc42-generator
+:jbake-menu: backlog
+:jbake-title: Backlog
+:jbake-type: page
+:jbake-status: published
 :toc: left
 :toclevels: 2
 :sectnums:
@@ -210,8 +214,10 @@ anything else. Closes TD-10.
 *Goal:* tests and build run automatically, not only when someone remembers.
 
 *Why:* the requirements ask for example GitHub Actions workflows
-(`docs/arc42_build_process_requirements.md:229`); no `.github` directory exists. Without a
-pipeline, EPIC 1 has no place to prove itself.
+(`docs/arc42_build_process_requirements.md:229`). A first workflow now exists — it builds the
+documentation microsite and publishes it to GitHub Pages
+(`.github/workflows/documentation.yml`) — but nothing runs the test suite or the template build.
+Without that, EPIC 1 has no place to prove itself.
 
 *Definition of done:* a push runs the test suite and a format-filtered build; a failing test turns
 the check red.

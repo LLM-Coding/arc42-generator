@@ -1,4 +1,8 @@
 = Specification: arc42-generator
+:jbake-menu: spec
+:jbake-title: Specification
+:jbake-type: page
+:jbake-status: published
 :toc: left
 :toclevels: 3
 :sectnums:

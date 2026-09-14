@@ -1,4 +1,8 @@
 = Socratic Code Theory Recovery: Open Questions — arc42-generator
+:jbake-menu: openquestions
+:jbake-title: Open Questions
+:jbake-type: page
+:jbake-status: published
 :toc: left
 :sectnums:
 

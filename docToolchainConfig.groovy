@@ -16,3 +16,38 @@ inputFiles = [
 ]
 
 taskInputsDirs = [:]
+
+// === microsite (task: generateSite) =========================================
+microsite = [:]
+
+// title in the upper left corner and fallback page title
+microsite.title = 'arc42-generator'
+
+// the landing page ships with the internal theme
+microsite.landingPage = 'landingpage.gsp'
+
+// footer and edit links
+microsite.footerGithub = 'https://github.com/LLM-Coding/arc42-generator'
+microsite.issueUrl = 'https://github.com/LLM-Coding/arc42-generator/issues/new'
+microsite.gitRepoUrl = 'https://github.com/LLM-Coding/arc42-generator/edit/master/docs/'
+microsite.footerText = '<small class="text-white">built with docToolchain</small>'
+
+// Menu entries come from the :jbake-menu: attribute of each document.
+// The include fragments below are rendered as pages but must not appear in the
+// menu: arc42 chapters, the help style and the ADR records all live inside
+// their parent document.
+microsite.menu = [
+        architecture : 'Architecture',
+        prd          : 'Product',
+        spec         : 'Specification',
+        backlog      : 'Backlog',
+        questiontree : 'Question Tree',
+        openquestions: 'Open Questions',
+        legacy       : 'arc42 Requirements',
+        src          : '-',
+        common       : '-',
+        adrs         : '-',
+        arc42        : '-',
+        specs        : '-',
+        doc          : '-',
+]

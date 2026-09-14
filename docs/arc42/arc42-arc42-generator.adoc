@@ -7,6 +7,10 @@
 include::src/config.adoc[]
 
 = image:arc42-logo.png[arc42] Architecture Documentation: arc42-generator
+:jbake-menu: architecture
+:jbake-title: Architecture (arc42)
+:jbake-type: page
+:jbake-status: published
 :revnumber: 1.0
 :revdate: 2026-09-14
 :revremark: recovered from the code; team answers marked in the text

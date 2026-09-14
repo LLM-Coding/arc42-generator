@@ -1,0 +1,88 @@
+name: Documentation
+
+# Builds the docToolchain microsite from docs/ and publishes it to GitHub Pages.
+# Pull requests build the site but do not publish it.
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'docs/**'
+      - 'docToolchainConfig.groovy'
+      - 'dtcw4'
+      - '.github/workflows/documentation.yml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'docToolchainConfig.groovy'
+      - 'dtcw4'
+      - '.github/workflows/documentation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deployment finish; queue the next one instead of cancelling it.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build microsite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # The docToolchain runtime lives outside the repository. Installing it
+      # means a git clone plus a one-time Gradle build, so cache it: the key
+      # changes only when the wrapper (and with it the pinned version) changes.
+      - name: Cache docToolchain runtime
+        id: dtc-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.doctoolchain
+          key: doctoolchain-${{ runner.os }}-${{ hashFiles('dtcw4') }}
+
+      - name: Install docToolchain
+        if: steps.dtc-cache.outputs.cache-hit != 'true'
+        run: ./dtcw4 local install doctoolchain
+
+      - name: Generate site
+        run: ./dtcw4 local generateSite
+
+      - name: Fail if the landing page is missing
+        run: test -s build/docs/microsite/output/index.html
+
+      - name: Upload site as build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: microsite
+          path: build/docs/microsite/output
+          retention-days: 7
+
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/docs/microsite/output
+
+  deploy:
+    name: Publish to GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

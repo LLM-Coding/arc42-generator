@@ -1,4 +1,8 @@
 = arc42 Template Requirements
+:jbake-menu: legacy
+:jbake-title: arc42 Requirements (legacy)
+:jbake-type: page
+:jbake-status: published
 :toc:
 :author: Gernot Starke
 :email: gernot.starke@innoq.com
