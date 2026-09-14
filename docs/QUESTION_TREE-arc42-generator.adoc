@@ -1,0 +1,908 @@
+= Socratic Code Theory Recovery: Question Tree — arc42-generator
+:toc: left
+:toclevels: 3
+:sectnums:
+:sectnumlevels: 1
+
+Bounded context:: `arc42-generator` (whole repository, working tree at commit `6672693`)
+Phase:: 1 of 2 — tree construction only. No PRD, no arc42 document, no ADRs.
+Method:: Naur (1985) theory recovery through recursive question refinement.
+Evidence rule:: A leaf is `[ANSWERED]` only with `file:line` evidence. A directory is not evidence.
+
+NOTE: The submodules `arc42-template/` and `req42-framework/` are not checked out in this
+working tree (both directories are empty). Every statement about Golden Master *content* is
+therefore derived from the generator's own code and configuration, never from template files.
+
+== Q1 — What problem does this bounded context solve, and for whom?
+
+=== Q1.1 Product identity
+
+==== Q1.1.1 What does the program produce?
+[ANSWERED] ZIP archives, one per (language, flavor, format) triple, named
+`arc42-template-<LANG>-<STYLE>-<FORMAT>.zip`.
+Evidence: `lib/Packager.groovy:83`; target directory `buildconfig.groovy:38`.
+
+==== Q1.1.2 From what input?
+[ANSWERED] A single AsciiDoc "Golden Master" per language: one main file plus a chapter
+directory plus images plus a version file.
+Evidence: `lib/Templates.groovy:213` (`arc42-template.adoc`), `lib/Templates.groovy:231-234`
+(`adoc/*.adoc`), `lib/Templates.groovy:194` (`version.properties`), `lib/Templates.groovy:102`
+(`images/`); source root `buildconfig.groovy:3`.
+
+==== Q1.1.3 What is explicitly not the product?
+[ANSWERED] The template itself. The README opens by sending template users away to
+arc42.org/download.
+Evidence: `README.adoc:3`, `README.adoc:132-133`.
+
+==== Q1.1.4 How large is the output space?
+[ANSWERED] 17 formats × 2 flavors × discovered languages.
+Evidence: `buildconfig.groovy:17-35` (17 format keys), `buildconfig.groovy:10-15` (`plain`,
+`with-help`; `with-examples` commented out), `build.groovy:220-223` (the product is computed
+and printed as languages × styles × formats).
+
+=== Q1.2 Primary users
+
+==== Q1.2.1 Who consumes the ZIPs?
+[ANSWERED] Architects and developers documenting a system; they never touch this repository,
+they download from arc42.org.
+Evidence: `README.adoc:3`; role definition `docs/arc42-requirements.adoc:95-97`.
+
+==== Q1.2.2 Who runs the build?
+[ANSWERED] Release maintainers: the build ends with instructions to commit and push the ZIPs
+into the template submodule.
+Evidence: `build-arc42.sh:198-205`; same workflow in `CLAUDE.md:202-207`.
+
+==== Q1.2.3 Who feeds the input?
+[ANSWERED] Translators and content contributors working in the separate template repository.
+Evidence: `docs/arc42_build_process_requirements.md:25-26`;
+`docs/arc42-requirements.adoc:99` (role "Contributor").
+
+=== Q1.3 Channels
+
+==== Q1.3.1 Delivery channel
+[ANSWERED] ZIPs are written into the `dist/` folder *of the template submodule* and pushed from
+there — the generator repository itself ships nothing.
+Evidence: `buildconfig.groovy:38`; `build-arc42.sh:200-204`.
+
+==== Q1.3.2 Invocation channel — container
+[ANSWERED] `docker compose up` runs `build-arc42.sh` in the container with the repository
+bind-mounted at `/workspace`.
+Evidence: `docker-compose.yml:6-9`; `README.adoc:39`.
+
+==== Q1.3.3 Invocation channel — direct CLI
+[ANSWERED] `groovy build.groovy [phase] [--format=X] [--parallel=false]`.
+Evidence: `build.groovy:16-21`.
+
+==== Q1.3.4 Invocation channel — cloud dev environment
+[ANSWERED] GitHub Codespaces, with write permission on `arc42/arc42-template` declared for the
+devcontainer.
+Evidence: `.devcontainer/devcontainer.json:4-9`; `README.adoc:53-61`.
+
+=== Q1.4 Why it was built
+
+==== Q1.4.1 What did it replace?
+[ANSWERED] A Gradle build. The replacement is the stated purpose of the current script.
+Evidence: `build.groovy:6`; `TEST-REPORT.md:1`.
+
+==== Q1.4.2 What was the stated gain?
+[ANSWERED] 17.4 s instead of ~90 s end-to-end, i.e. a claimed 5.2×.
+Evidence: `TEST-REPORT.md:365`; per-phase figures `TEST-REPORT.md:269-274`.
+
+==== Q1.4.3 Why not simply keep Gradle?
+[OPEN] Category: design-rationale. Ask role: Architect.
+The code records the outcome, never the decision. Whether speed, the "chicken-and-egg problem"
+mentioned in `CLAUDE.md:120`, or maintainer skill set drove the rewrite is not derivable.
+
+=== Q1.5 Success metrics
+
+==== Q1.5.1 Build-time metric
+[ANSWERED] Wall-clock duration is measured and printed for every phase and for the whole run.
+Evidence: `build.groovy:208-217`; `lib/Converter.groovy:463-470`; `lib/Packager.groovy:170-178`.
+
+==== Q1.5.2 Output-correctness metric
+[ANSWERED] Two gates: CommonMark validity of generated Markdown, and existence of every image
+referenced by `with-help` Markdown. Both are non-fatal.
+Evidence: `build-arc42.sh:97` (cmark), `build-arc42.sh:162-177` (reference check),
+`build-arc42.sh:109-111` and `build-arc42.sh:187-188` (explicitly non-fatal).
+
+==== Q1.5.3 Adoption metric
+[OPEN] Category: business-context. Ask role: Product Owner.
+No download counter, telemetry, or target figure exists anywhere in the repository. Whether
+success is measured in downloads, languages covered, or formats supported cannot be derived.
+
+=== Q1.6 Segment priority
+
+==== Q1.6.1 Which languages rank first?
+[ANSWERED] EN and DE. They are the only languages the discovery test asserts on, and EN is the
+only language whose Markdown output is validated.
+Evidence: `test-discovery.groovy:79`; `build-arc42.sh:89`.
+
+==== Q1.6.2 Which formats rank first?
+[ANSWERED] The five image-bearing text formats are the only ones whose images are checked.
+Evidence: `build-arc42.sh:124` (`markdown asciidoc textile rst html`).
+
+==== Q1.6.3 Why that ranking?
+[OPEN] Category: business-context. Ask role: Product Owner.
+The code shows which languages and formats are guarded, not which the community actually uses.
+
+== Q2 — What is the specification of this bounded context?
+
+=== Q2.1 Actors
+
+==== Q2.1.1 Human actor
+[ANSWERED] One: the person who starts the pipeline; no roles, no authentication, no
+authorization anywhere in the code.
+Evidence: `build-arc42.sh:84`; `build.groovy:45-52`.
+
+==== Q2.1.2 External system — AsciidoctorJ
+[ANSWERED] In-process library, one shared instance per `Converter`.
+Evidence: `lib/Converter.groovy:33`, invoked at `lib/Converter.groovy:106`,
+`lib/Converter.groovy:139`, `lib/Converter.groovy:313`.
+
+==== Q2.1.3 External system — Pandoc
+[ANSWERED] Out-of-process child process, invoked with an explicit argument vector and a UTF-8
+environment, working directory set to the DocBook output directory.
+Evidence: `lib/Converter.groovy:181-187`, `lib/Converter.groovy:208-217`.
+
+==== Q2.1.4 External system — Git / GitHub
+[ANSWERED] The submodule is re-initialised and pulled on every containerised run.
+Evidence: `build-arc42.sh:66-78`; remotes `.gitmodules:1-6`.
+
+==== Q2.1.5 External system — cmark
+[ANSWERED] Called once per generated Markdown file of `build/EN/markdown`.
+Evidence: `build-arc42.sh:94-104`.
+
+=== Q2.2 Use-case catalog
+
+==== Q2.2.1 UC-1 Generate templates from Golden Master
+[ANSWERED] Phase `templates`.
+Evidence: `build.groovy:129-137` → `lib/Templates.groovy:155-257`.
+
+==== Q2.2.2 UC-2 Discover generated templates
+[ANSWERED] Phase `convert`, first half; also re-entered by the distribution phase when run
+alone.
+Evidence: `build.groovy:145-162`; re-entry `build.groovy:188-191`.
+
+==== Q2.2.3 UC-3 Convert to formats
+[ANSWERED] Phase `convert`, second half.
+Evidence: `build.groovy:168-179` → `lib/Converter.groovy:410-472`.
+
+==== Q2.2.4 UC-4 Create distributions
+[ANSWERED] Phase `distribution`.
+Evidence: `build.groovy:185-202` → `lib/Packager.groovy:102-185`.
+
+==== Q2.2.5 UC-5 Full supervised pipeline
+[ANSWERED] Install Pandoc if absent, refresh the submodule, build, validate, print release
+instructions.
+Evidence: `build-arc42.sh:19-45`, `:48-79`, `:84`, `:86-189`, `:196-205`.
+
+==== Q2.2.6 UC-6 Switch the generator to req42
+[ANSWERED — broken] The script rewrites `build.gradle`, `settings.gradle` and `subBuild.gradle`
+and calls `./gradlew`; none of these files exist in the repository any more.
+Evidence: `switchToreq42.sh:1-4` and `:10-12`; absent from the file list — the only remaining
+build entry points are `build.groovy` and `build-arc42.sh`.
+
+=== Q2.3 Per-interface system specifications
+
+==== Q2.3.1 CLI — phase argument
+[ANSWERED] The first argument not starting with `--` is the phase; default `all`. Input is
+never validated: an unrecognised phase matches none of the four guards and the program prints
+"BUILD SUCCESSFUL" having done nothing.
+Evidence: `build.groovy:46`; guards `build.groovy:129`, `:145`, `:168`, `:185`; unconditional
+success banner `build.groovy:211-215`.
+
+==== Q2.3.2 CLI — `--format=`
+[ANSWERED] Value is taken verbatim, with no check against the configured format map. An unknown
+value reaches Pandoc as both reader target and file extension.
+Evidence: `build.groovy:48-51`; pass-through default `lib/Converter.groovy:400`.
+
+==== Q2.3.3 CLI — `--parallel=false`
+[ANSWERED] Exact-string opt-out; any other spelling leaves parallelism on.
+Evidence: `build.groovy:47`; consumed at `lib/Converter.groovy:427` and
+`lib/Packager.groovy:128`.
+
+==== Q2.3.4 CLI — exit codes
+[ANSWERED] `0` on success; `1` on config load failure, class load failure, and any phase
+exception; also `1` when discovery finds nothing.
+Evidence: `build.groovy:85`, `:116`, `:135`, `:152`, `:160`, `:177`, `:200`; test runner
+`run-all-tests.groovy:147-153`.
+
+==== Q2.3.5 Configuration file contract
+[ANSWERED] A Groovy `ConfigSlurper` script with three blocks: `goldenMaster`, `formats`,
+`distribution`. No schema validation; a missing key surfaces as a Groovy exception at use site.
+Evidence: `build.groovy:76`; `buildconfig.groovy:2-16`, `:17-35`, `:37-40`.
+
+==== Q2.3.6 Input file format contract
+[ANSWERED] Per language: `arc42-template.adoc`, `adoc/*.adoc`, `images/*`, `version.properties`;
+plus a shared `common/` tree copied per language.
+Evidence: `lib/Templates.groovy:213`, `:231-234`, `:102`, `:194`, `:177-190`.
+
+==== Q2.3.7 Output naming contract
+[ANSWERED] HTML `arc42-template.html`; DocBook `arc42-template.xml`; Pandoc single-page
+`arc42-template-<LANG>.<ext>`; multi-page one file per chapter, named after the chapter.
+Evidence: `lib/Converter.groovy:89`, `:122`, `:174`, `:338`.
+
+==== Q2.3.8 Pandoc error contract
+[ANSWERED — inconsistent] Single-page conversion raises `RuntimeException` on a non-zero exit;
+multi-page conversion only prints a warning and continues, so a failed chapter silently
+disappears from the output.
+Evidence: `lib/Converter.groovy:219-222` versus `lib/Converter.groovy:345`.
+
+==== Q2.3.9 AsciidoctorJ error contract
+[ANSWERED] In the multi-page path every conversion exception is swallowed with an inline
+comment, by design, to skip `config`-only files.
+Evidence: `lib/Converter.groovy:313`.
+
+=== Q2.4 Data / entity model
+
+==== Q2.4.1 Template metadata record
+[ANSWERED] A 13-field map: language, style, sourcePath, srcDir, imagesDir, hasImages, mainFile,
+mainFileName, adocFileCount, commonDir, versionProperties, revnumber.
+Evidence: `lib/Discovery.groovy:127-140`.
+
+==== Q2.4.2 Format descriptor record
+[ANSWERED] `[pandocFormat, extension, args]` per format, plus an identity fallback.
+Evidence: `lib/Converter.groovy:382-398`, fallback `:400`.
+
+==== Q2.4.3 AsciiDoc attribute record
+[ANSWERED] Seven fixed attributes plus up to three version attributes taken from
+`version.properties`.
+Evidence: `lib/Converter.groovy:357-365`, `:368-373`.
+
+==== Q2.4.4 Where does the entity model live?
+[ANSWERED] Nowhere as a type: all three records are untyped `Map`s passed between classes;
+there is no DTO, no class, no schema.
+Evidence: `lib/Discovery.groovy:43` (`List<Map>`), `lib/Converter.groovy:44` (`Map template`),
+`lib/Packager.groovy:102`.
+
+=== Q2.5 Acceptance criteria
+
+==== Q2.5.1 Feature-flag removal
+[ANSWERED] Help blocks and `ifdef` markers must be gone, non-help text must remain.
+Evidence: `test-templates.groovy:46-48`.
+
+==== Q2.5.2 Generated structure
+[ANSWERED] Every language must carry both styles with at least one `.adoc` file.
+Evidence: `test-templates.groovy:62-74`.
+
+==== Q2.5.3 Discovery completeness
+[ANSWERED] Both styles present; EN and DE must exist.
+Evidence: `test-discovery.groovy:49-50`, `:79`.
+
+==== Q2.5.4 Conversion smoke criteria
+[ANSWERED] HTML, DocBook, Markdown and DOCX files must exist after conversion; multi-page
+Markdown must yield more than one file.
+Evidence: `test-converter.groovy:47`, `:55`, `:70`, `:78`, `:89-90`.
+
+==== Q2.5.5 Post-build validation criteria
+[ANSWERED] Generated Markdown parses as CommonMark; every image directory exists and is
+non-empty; every Markdown image reference resolves.
+Evidence: `build-arc42.sh:97`, `:139-145`, `:174-177`.
+
+=== Q2.6 Cross-cutting business rules
+
+==== Q2.6.1 BR-1 Language directory naming
+[ANSWERED] A directory is a language exactly when its name matches `/^[A-Z]{2,}$/`. The rule is
+implemented twice, once on the input side and once on the generated side.
+Evidence: `lib/Templates.groovy:38`; `lib/Discovery.groovy:62`.
+
+==== Q2.6.2 BR-2 Flavor definition
+[ANSWERED] A flavor is a named list of features to keep; everything in `allFeatures` not listed
+is stripped.
+Evidence: `buildconfig.groovy:7-15`; subtraction at `lib/Templates.groovy:205`.
+
+==== Q2.6.3 BR-3 Feature removal mechanics
+[ANSWERED] Two mechanisms: delete `[role="arc42<feature>"]` delimited blocks; for `help` also
+delete the `ifdef::arc42help[]` / `endif::arc42help[]` marker lines while keeping their body.
+Evidence: `lib/Templates.groovy:80`, `:84-87`.
+
+==== Q2.6.4 BR-4 Image policy by flavor
+[ANSWERED] `plain` receives only `arc42-logo.png`; every other flavor receives all images.
+Evidence: `lib/Templates.groovy:114-133`.
+
+==== Q2.6.5 BR-5 Image policy by format
+[ANSWERED] Images are copied only for formats whose `imageFolder` flag is true; `epub` is the
+sole exception in the configuration. `mkdocs` variants receive them under `docs/images`.
+Evidence: `buildconfig.groovy:18-34`; `lib/Converter.groovy:54`; `lib/Converter.groovy:282`.
+
+==== Q2.6.6 BR-6 Include-path rewriting
+[ANSWERED] On generation, `include::adoc/` becomes `include::` and `include::../common/` becomes
+`include::../../../common/`; on AsciiDoc output, every `include::` gains a `src/` prefix.
+Evidence: `lib/Templates.groovy:68`, `:71`; `lib/Converter.groovy:265`.
+
+==== Q2.6.7 BR-7 Russian LaTeX font encoding
+[ANSWERED] LaTeX output for RU adds `fontenc=T1,T2A`.
+Evidence: `lib/Converter.groovy:195-197`.
+
+==== Q2.6.8 BR-8 mkdocsMP page suppression
+[ANSWERED] `config.md` and `about-arc42.md` are deleted from mkdocsMP output.
+Evidence: `lib/Converter.groovy:348`.
+
+==== Q2.6.9 BR-9 Flavor name normalisation in file names
+[ANSWERED] Non-letters are stripped from the style for the ZIP name, so `with-help` becomes
+`withhelp`.
+Evidence: `lib/Packager.groovy:80`, used at `:83`.
+
+==== Q2.6.10 BR-10 The declared but unused `example` feature
+[OPEN] Category: business-context. Ask role: Domain Expert.
+`buildconfig.groovy:7` declares `example` as a Golden Master feature and
+`buildconfig.groovy:13-14` keeps a `with-examples` style commented out with the note "no content
+yet". What an `arc42example` block should contain, and whether the examples flavor is still
+intended, is a question about arc42 itself and cannot be answered from this repository.
+
+== Q3 — What is the architecture of this bounded context?
+
+=== Q3.1 Requirements overview (arc42 ch. 1)
+
+==== Q3.1.1 Stated functional goal
+[ANSWERED] One source, many formats, many languages, two flavors, reproducible and extensible.
+Evidence: `docs/arc42_build_process_requirements.md:11-15`; `README.adoc:120-124`.
+
+==== Q3.1.2 Stated scope boundary
+[ANSWERED] The build repository owns build logic; the template repository owns content only.
+Evidence: `docs/arc42_build_process_requirements.md:86-104`.
+
+=== Q3.2 Architecture constraints (arc42 ch. 2)
+
+==== Q3.2.1 Technical constraints
+===== Q3.2.1.1 Runtime and language
+[ANSWERED] Groovy 5.0.3 on OpenJDK 21 JRE, Alpine 3.20.
+Evidence: `Dockerfile:23-26`, `:14`, `:29`, `:4`, `:50`.
+
+===== Q3.2.1.2 Pinned libraries
+[ANSWERED] AsciidoctorJ 2.5.10, AsciidoctorJ-Diagram 2.2.14, GPars 1.2.1, resolved by Grape at
+script start.
+Evidence: `lib/Converter.groovy:3-5`; pre-warmed at `init-groovy-deps.groovy:3-5`.
+
+===== Q3.2.1.3 Pinned external binary
+[ANSWERED] Pandoc 3.7.0.2, installed from a GitHub release `.deb` when missing.
+Evidence: `build-arc42.sh:26-27`, `:39-40`.
+
+===== Q3.2.1.4 Supported execution mode
+[ANSWERED] Docker is declared the only supported approach; local execution is explicitly
+unsupported.
+Evidence: `README.adoc:17`, `:19`, `:113`.
+
+===== Q3.2.1.5 Licence constraint
+[ANSWERED] MIT for the generator; open-source-only toolchain mandated for the build.
+Evidence: `LICENSE.txt:1-3`; `docs/arc42_build_process_requirements.md:190-199`.
+
+==== Q3.2.2 Organizational / process constraints
+===== Q3.2.2.1 Repository split
+[ANSWERED] Two repositories, template consumed as a Git submodule.
+Evidence: `docs/arc42_build_process_requirements.md:86-104`; `.gitmodules:1-6`.
+
+===== Q3.2.2.2 Release process
+[ANSWERED] Manual: build, inspect `arc42-template/dist/`, then commit and push inside the
+submodule.
+Evidence: `build-arc42.sh:198-205`; `CLAUDE.md:202-207`.
+
+===== Q3.2.2.3 CI process
+[ANSWERED — gap] The requirements demand example GitHub Actions workflows; the repository
+contains no `.github` directory at all, so every build is run by hand.
+Evidence: requirement `docs/arc42_build_process_requirements.md:229`; absence confirmed against
+the repository file list (no workflow file exists).
+
+===== Q3.2.2.4 Agent tool policy
+[ANSWERED] Bash and Write require confirmation; reading `.env*` and `secrets/**` is denied.
+Evidence: `settings.json:12-20`.
+
+===== Q3.2.2.5 Review and branching rules
+[OPEN] Category: design-rationale. Ask role: Developer.
+`CLAUDE.md:350` and `:356` prescribe feature branches and Conventional Commits for future work,
+but the history mixes conventional and free-form subjects and no branch protection or template
+is stored in the repository. Which rule actually binds contributors is not derivable.
+
+==== Q3.2.3 Conventional constraints
+===== Q3.2.3.1 Line endings
+[ANSWERED] LF enforced for shell, Docker and Groovy files; binary types excluded from
+normalisation.
+Evidence: `.gitattributes:2-10`, `:23-31`.
+
+===== Q3.2.3.2 Ignored artifacts
+[ANSWERED] `build`, `src_gen`, IDE files and `.gradle` are untracked.
+Evidence: `.gitignore:1-8`.
+
+===== Q3.2.3.3 Output directory layout
+[ANSWERED] `build/src_gen/<LANG>/asciidoc/<STYLE>/src`, then
+`build/<LANG>/<FORMAT>/<STYLE>`, then `arc42-template/dist/`.
+Evidence: `lib/Templates.groovy:206-207`; `lib/Converter.groovy:47`; `buildconfig.groovy:38`.
+
+===== Q3.2.3.4 Code layout convention
+[ANSWERED] One class per pipeline stage in `lib/`, loaded by file name from the orchestrator.
+Evidence: `build.groovy:101-111`.
+
+=== Q3.3 Context and scope (arc42 ch. 3)
+
+==== Q3.3.1 Input boundary — Golden Master
+[ANSWERED] Read-only file access under the configured source path, refreshed by Git.
+Evidence: `buildconfig.groovy:3`; `lib/Templates.groovy:31`; refresh `build-arc42.sh:68-69`.
+
+==== Q3.3.2 Output boundary — distribution
+[ANSWERED] Write access into the submodule's `dist/` directory.
+Evidence: `buildconfig.groovy:38`; `lib/Packager.groovy:84-86`.
+
+==== Q3.3.3 Process boundary — Pandoc
+[ANSWERED] `ProcessBuilder` with a fixed argument vector, a working directory and two
+environment variables.
+Evidence: `lib/Converter.groovy:208-216`.
+
+==== Q3.3.4 Process boundary — package manager and network
+[ANSWERED] The pipeline downloads and installs a `.deb` as root when Pandoc is missing.
+Evidence: `build-arc42.sh:39-41`.
+
+=== Q3.4 Solution strategy (arc42 ch. 4)
+
+==== Q3.4.1 Pivot-format strategy
+[ANSWERED] HTML and AsciiDoc are produced directly; every other format goes AsciiDoc → DocBook →
+Pandoc.
+Evidence: `lib/Converter.groovy:60-71`.
+
+==== Q3.4.2 Parallelisation strategy
+[ANSWERED] GPars pool sized to `availableProcessors`, parallel over templates for conversion and
+over (template, format) pairs for packaging.
+Evidence: `lib/Converter.groovy:429-431`; `lib/Packager.groovy:130-131`.
+
+==== Q3.4.3 Convention-over-configuration strategy
+[ANSWERED] Languages are discovered from the filesystem rather than configured, so a new
+translation needs no code and no config change.
+Evidence: `lib/Templates.groovy:37-40`.
+
+==== Q3.4.4 Caching strategy
+[ANSWERED] Discovery memoises its result for the process lifetime, with an explicit
+invalidation method.
+Evidence: `lib/Discovery.groovy:17`, `:45-47`, `:152`, `:159-161`.
+
+=== Q3.5 Building block view (arc42 ch. 5)
+
+==== Q3.5.1 Level 1 — orchestrator
+[ANSWERED] `build.groovy` parses arguments, loads config, loads four classes by file and runs
+four guarded phases.
+Evidence: `build.groovy:45-52`, `:76`, `:101-111`, `:129-202`.
+
+==== Q3.5.2 Level 2 — Templates
+[ANSWERED] Golden Master processing: discover languages, strip features, fix includes, copy
+images and common files.
+Evidence: `lib/Templates.groovy:30-48`, `:64-74`, `:75-90`, `:101-134`, `:155-257`.
+
+==== Q3.5.3 Level 2 — Discovery
+[ANSWERED] Scans the generated tree, validates structure, builds metadata, offers a query API.
+Evidence: `lib/Discovery.groovy:43-154`, `:168-210`, `:219-241`.
+
+==== Q3.5.4 Level 2 — Packager
+[ANSWERED] Zips one output directory per (language, style, format) into the dist folder.
+Evidence: `lib/Packager.groovy:35-60`, `:71-93`, `:102-185`.
+
+==== Q3.5.5 Level 3 — Converter, dispatch
+[ANSWERED] A four-way if-chain on the format name decides the conversion path.
+Evidence: `lib/Converter.groovy:60-71`.
+
+==== Q3.5.6 Level 3 — Converter, single-page Pandoc path
+[ANSWERED] Derives a sibling `docbook` directory from the output path, converts, copies images
+next to the XML, then runs Pandoc from that directory.
+Evidence: `lib/Converter.groovy:151-154`, `:157-170`, `:206-217`.
+
+==== Q3.5.7 Level 3 — Converter, multi-page path
+[ANSWERED] Converts each chapter file separately to DocBook, skipping the main file and
+`config.adoc`, then runs Pandoc per XML file.
+Evidence: `lib/Converter.groovy:303-315`, `:337-346`.
+
+==== Q3.5.8 Level 3 — Converter, post-processing
+[ANSWERED] LaTeX thin spaces are replaced by ordinary spaces; HTML gets a charset meta tag if
+none is present.
+Evidence: `lib/Converter.groovy:225-228`, `:231-238`.
+
+==== Q3.5.9 Level 4 — dead branch in post-processing
+[ANSWERED] The HTML fix-up at `lib/Converter.groovy:231-238` sits inside `convertViaPandoc`,
+which `html` never reaches, because `html` is routed to AsciidoctorJ one level up.
+Evidence: routing `lib/Converter.groovy:60-61`; unreachable branch `lib/Converter.groovy:231`.
+
+=== Q3.6 Runtime view (arc42 ch. 6)
+
+==== Q3.6.1 Happy path sequence
+[ANSWERED] generate → discover → convert → package, each phase guarded by the phase argument and
+each failure terminating the process.
+Evidence: `build.groovy:129-137`, `:145-162`, `:168-179`, `:185-202`.
+
+==== Q3.6.2 Conversion loop
+[ANSWERED] Outer parallel loop over templates, inner sequential loop over formats; counters are
+mutated inside a `synchronized(this)` block.
+Evidence: `lib/Converter.groovy:430-443`.
+
+==== Q3.6.3 Failure path inside the loop
+[ANSWERED] A failing conversion is caught per (template, format), logged with a stack trace,
+counted as failed, and the run continues; the exit code stays 0.
+Evidence: `lib/Converter.groovy:74-78`; counting `:437-440`; no rethrow before
+`build.groovy:211`.
+
+==== Q3.6.4 Submodule refresh path
+[ANSWERED] Three attempts, each deleting stale index locks first, with a 2 s pause and a hard
+exit after the third.
+Evidence: `build-arc42.sh:66-78`.
+
+=== Q3.7 Deployment view (arc42 ch. 7)
+
+==== Q3.7.1 Image build stage
+[ANSWERED] Alpine builder installs JRE, bash, git, wget, unzip, pandoc and cmark, then unpacks
+Groovy and pre-populates the Grape cache.
+Evidence: `Dockerfile:13-20`, `:23-26`, `:40-45`.
+
+==== Q3.7.2 Runtime stage
+[ANSWERED] Second Alpine stage with runtime packages only; Groovy and the Grape cache are copied
+from the builder; only the build scripts and `lib/` are copied in.
+Evidence: `Dockerfile:53-58`, `:64-68`, `:78-79`.
+
+==== Q3.7.3 Container execution contract
+[ANSWERED] Repository bind-mounted at `/workspace`, working directory `/workspace`, command
+`./build-arc42.sh`, image tagged `arc42-generator:9.1.0`.
+Evidence: `docker-compose.yml:4-9`; default command `Dockerfile:82`.
+
+==== Q3.7.4 Why the image copies only part of the repository
+[ANSWERED] `Dockerfile:78-79` copies four scripts and `lib/`; the test scripts are not in the
+image, so `run-all-tests.groovy` cannot run in the runtime container.
+Evidence: `Dockerfile:78-79` versus `run-all-tests.groovy:22-36`.
+
+=== Q3.8 Crosscutting concepts (arc42 ch. 8)
+
+==== Q3.8.1 Threat model
+===== Q3.8.1.1 Is a threat catalogue present?
+[OPEN] Category: design-rationale. Ask role: Architect.
+No STRIDE analysis, no threat IDs, no security section exists in any document in the repository.
+
+===== Q3.8.1.2 Which trust assumption does the code encode?
+[ANSWERED] The Golden Master is trusted completely: AsciiDoc is processed with
+`SafeMode.UNSAFE`, which permits arbitrary includes and file access from template content.
+Evidence: `lib/Converter.groovy:100`, `:132`, `:311`.
+
+===== Q3.8.1.3 Which Git trust assumption does the container encode?
+[ANSWERED] All directories are marked safe, disabling Git's ownership check inside the image.
+Evidence: `Dockerfile:61`; narrower variant at `build-arc42.sh:52-53`.
+
+==== Q3.8.2 Security concept
+===== Q3.8.2.1 What protection exists at all?
+[ANSWERED] Exactly one mechanism, and it protects the developer's agent session rather than the
+build: a deny list for `.env*` and `secrets/**`.
+Evidence: `settings.json:17-20`.
+
+===== Q3.8.2.2 Are downloads integrity-checked?
+[ANSWERED — no] Neither the Pandoc `.deb` nor the Groovy ZIP is verified by checksum or
+signature before being installed.
+Evidence: `build-arc42.sh:39-41`; `Dockerfile:23-25`.
+
+===== Q3.8.2.3 Why was UNSAFE chosen?
+[OPEN] Category: design-rationale. Ask role: Architect.
+Whether UNSAFE is required for the template's own includes or was chosen to avoid debugging
+path errors is not derivable.
+
+==== Q3.8.3 Test concept
+===== Q3.8.3.1 What layer do the tests sit on?
+[ANSWERED] Integration only. The report states the absence of unit tests as a deliberate choice.
+Evidence: `run-all-tests.groovy:21-37`; `TEST-REPORT.md:15`.
+
+===== Q3.8.3.2 How are tests executed?
+[ANSWERED] The runner spawns `groovy <script>` per suite and aggregates exit codes.
+Evidence: `run-all-tests.groovy:55-64`, `:147-153`.
+
+===== Q3.8.3.3 What is asserted about content?
+[ANSWERED] Existence, file counts and non-emptiness; no output is compared against an expected
+document.
+Evidence: `test-converter.groovy:38-47`, `:89-90`.
+
+===== Q3.8.3.4 Do tests trace to use cases?
+[ANSWERED — no] No test carries a use-case or rule identifier; suites are named after the class
+they exercise.
+Evidence: `run-all-tests.groovy:22-36`.
+
+==== Q3.8.4 Observability
+===== Q3.8.4.1 What is the logging mechanism?
+[ANSWERED] `println` to stdout only; no logging framework, no levels, no log file.
+Evidence: `build.groovy:61-67`; `lib/Converter.groovy:436-439`; `lib/Packager.groovy:141-145`.
+
+===== Q3.8.4.2 What is counted?
+[ANSWERED] Completed, failed and skipped counts plus durations per phase.
+Evidence: `lib/Converter.groovy:466-470`; `lib/Packager.groovy:173-178`.
+
+===== Q3.8.4.3 Is failure visible in the exit status?
+[ANSWERED — no] `lib/Packager.groovy:116` initialises `failed` and never increments it, so the
+summary at `lib/Packager.groovy:177` always prints `Failed: 0`; conversion failures are counted
+but never change the process exit code.
+Evidence: `lib/Packager.groovy:116`, `:177`; `lib/Converter.groovy:438`; `build.groovy:211-215`.
+
+==== Q3.8.5 Error handling
+===== Q3.8.5.1 Fail-fast boundary
+[ANSWERED] Configuration load, class load and each phase abort the process with exit 1.
+Evidence: `build.groovy:83-86`, `:113-117`, `:130-136`.
+
+===== Q3.8.5.2 Fail-soft boundary
+[ANSWERED] Individual conversions are isolated per (template, format) and never abort the run.
+Evidence: `lib/Converter.groovy:74-78`.
+
+===== Q3.8.5.3 Retry
+[ANSWERED] Exactly one retry loop exists, for the Git submodule update: three attempts, fixed
+2 s pause, lock cleanup before each attempt.
+Evidence: `build-arc42.sh:66-78`.
+
+===== Q3.8.5.4 Circuit breaker, fallback, recovery
+[ANSWERED — none] No breaker and no compensation exist. The only fallback is silent: an unknown
+format falls back to an identity Pandoc descriptor.
+Evidence: `lib/Converter.groovy:400`.
+
+==== Q3.8.6 Encoding and localisation
+===== Q3.8.6.1 How is encoding handled?
+[ANSWERED] UTF-8 is forced explicitly at every read and write, and in the Pandoc child
+environment.
+Evidence: `lib/Templates.groovy:199`, `:218`, `:226`, `:241`; `lib/Discovery.groovy:121`;
+`lib/Converter.groovy:213-214`.
+
+===== Q3.8.6.2 Is there any per-language special case?
+[ANSWERED] One: RU LaTeX font encoding.
+Evidence: `lib/Converter.groovy:195-197`.
+
+=== Q3.9 Architecture decisions (arc42 ch. 9)
+
+==== Q3.9.1 Decision: replace Gradle with plain Groovy
+[ANSWERED — outcome only] Recorded as a result with measurements, not as an ADR.
+Evidence: `build.groovy:6`; `TEST-REPORT.md:338-365`.
+
+==== Q3.9.2 Decision: two repositories, template as submodule
+[ANSWERED] Written down with rationale in prose.
+Evidence: `docs/arc42_build_process_requirements.md:86-104`.
+
+==== Q3.9.3 Decision: DocBook as pivot format
+[ANSWERED — outcome only] Implemented in the dispatch chain; no rationale recorded anywhere.
+Evidence: `lib/Converter.groovy:69-70`.
+
+==== Q3.9.4 Decision: Docker as the only supported environment
+[ANSWERED] Stated as policy in the README.
+Evidence: `README.adoc:17-19`.
+
+==== Q3.9.5 Are decisions recorded as ADRs?
+[ANSWERED — no] The repository contains no ADR directory and no decision record format; the four
+decisions above are recovered from prose and code.
+Evidence: documentation set is `docs/arc42-requirements.adoc`,
+`docs/arc42_build_process_requirements.md`, `docs/confluence.adoc`,
+`docs/export2confluence.adoc` — none of them is a decision record (see
+`docs/arc42_build_process_requirements.md:374-394`, which still lists the open decisions).
+
+=== Q3.10 Quality requirements (arc42 ch. 10)
+
+See the Q4 branch for the eight characteristics with their measurable evidence. Two documented
+requirements have no counterpart in code:
+
+==== Q3.10.1 Requirement: reproducible, network-free build
+[ANSWERED — contradicted] The requirement demands no network dependency at build time; Grape
+resolves three artifacts at script start, and Pandoc is downloaded when missing.
+Evidence: requirement `docs/arc42_build_process_requirements.md:323`; contradicting code
+`lib/Converter.groovy:3-5`, `build-arc42.sh:39-40`. The Docker image mitigates this by
+pre-populating the cache (`Dockerfile:40-45`).
+
+==== Q3.10.2 Requirement: plugin-like format adapters
+[ANSWERED — contradicted] Adding a format requires edits in three places: the config map, the
+dispatch chain and the Pandoc descriptor table.
+Evidence: requirement `docs/arc42_build_process_requirements.md:335-347`; implementation
+`buildconfig.groovy:17-35`, `lib/Converter.groovy:60-71`, `lib/Converter.groovy:382-398`.
+
+=== Q3.11 Risks and technical debt (arc42 ch. 11)
+
+See the Q5 branch. Every item there is recovered from code, not from a risk register — the
+repository contains no risk list.
+
+=== Q3.12 Glossary (arc42 ch. 12)
+
+==== Q3.12.1 Golden Master
+[ANSWERED] The authoritative AsciiDoc source tree, configured as `sourcePath`.
+Evidence: `buildconfig.groovy:2-3`.
+
+==== Q3.12.2 Style / flavor
+[ANSWERED] A named feature subset; the code says `style`, the README and requirements say
+`flavour`.
+Evidence: `buildconfig.groovy:10-15`; `README.adoc:123`;
+`docs/arc42_build_process_requirements.md:133`.
+
+==== Q3.12.3 MP format
+[ANSWERED] "Multi-page": one output file per chapter; four format names carry the suffix.
+Evidence: `lib/Converter.groovy:299`.
+
+==== Q3.12.4 Is the vocabulary consistent?
+[ANSWERED — no] `style` versus `flavour` and `plain` versus `Skeleton` name the same things in
+code and in the requirements.
+Evidence: `buildconfig.groovy:11` versus `docs/arc42-requirements.adoc:171`.
+
+== Q4 — What quality goals drive the design?
+
+Scenarios below use the six-part form where the code supplies a literal response measure. No
+target number is invented; every figure is quoted from the repository.
+
+=== Q4.1 Functional suitability
+[ANSWERED] Stimulus: a full build. Response: every discovered language is generated in two
+flavors and 17 formats. Measure: 18 templates and 306 conversions for nine languages, computed
+and printed by the build itself.
+Evidence: `buildconfig.groovy:17-35`; `build.groovy:220-223`; measured run `TEST-REPORT.md:119`.
+
+=== Q4.2 Performance efficiency
+[ANSWERED] Stimulus: full HTML build of 18 templates on a developer machine. Response: pipeline
+completes. Measure: 17.4 s total, 10.7 s template generation, 0.6 s packaging.
+Evidence: `TEST-REPORT.md:365`, `:102`, `:274`; mechanism `lib/Converter.groovy:429`.
+
+=== Q4.3 Compatibility
+[ANSWERED] Stimulus: a Markdown consumer parses the output. Response: the file parses as
+CommonMark. Measure: `cmark` exits 0 for every file in `build/EN/markdown`.
+Evidence: `build-arc42.sh:94-104`; format-level compatibility via the DocBook pivot
+`lib/Converter.groovy:69-70`.
+
+=== Q4.4 Interaction capability (usability)
+[ANSWERED] Stimulus: a maintainer wants all outputs. Response: one command. Measure: a single
+`docker compose up`, or one `groovy build.groovy` with an optional phase and format filter.
+Evidence: `docker-compose.yml:9`; `build.groovy:16-21`; progress line per conversion
+`lib/Converter.groovy:436`.
+
+=== Q4.5 Reliability
+[ANSWERED] Stimulus: one conversion fails. Response: the remaining conversions still run and the
+failure is reported. Measure: failure is isolated to one (template, format) pair; the run
+continues and validation failures are declared non-fatal.
+Evidence: `lib/Converter.groovy:74-78`; `build-arc42.sh:109-111`, `:187-188`; retry only for the
+submodule `build-arc42.sh:66-78`.
+
+=== Q4.6 Security
+[ANSWERED] Stimulus: the Golden Master contains a hostile include. Response: it is executed.
+Measure: `SafeMode.UNSAFE` on all three AsciidoctorJ call sites, `safe.directory '*'` in the
+image, and no checksum on any downloaded binary.
+Evidence: `lib/Converter.groovy:100`, `:132`, `:311`; `Dockerfile:61`; `build-arc42.sh:39-41`.
+
+=== Q4.7 Maintainability
+[ANSWERED] Stimulus: add a language versus add a format. Response: the first needs no code, the
+second needs three edits. Measure: language discovery is regex-driven at
+`lib/Templates.groovy:38`; a format touches `buildconfig.groovy:17-35`,
+`lib/Converter.groovy:60-71` and `lib/Converter.groovy:382-398`.
+Evidence: as cited; procedure documented at `CLAUDE.md:170-181`.
+
+=== Q4.8 Flexibility / portability
+[ANSWERED] Stimulus: run on amd64, arm64, macOS, Windows or Codespaces. Response: the same
+pipeline runs. Measure: architecture-specific Pandoc package selection, LF normalisation for
+scripts, and a Codespaces permission declaration.
+Evidence: `build-arc42.sh:23-36`; `.gitattributes:2-7`; `.devcontainer/devcontainer.json:4-9`.
+
+=== Q4.9 Which characteristic has priority?
+[OPEN] Category: quality-goals. Ask role: Architect.
+The code guards performance and functional suitability with measurements, and leaves security
+and reliability to defaults. Whether that ranking is intended or accidental cannot be read from
+the code.
+
+== Q5 — What risks and technical debt exist?
+
+=== Q5.1 Technical debt
+
+==== Q5.1.1 Dead migration script
+[ANSWERED] `switchToreq42.sh` rewrites Gradle files and calls `./gradlew`; none of those files
+exist after the Gradle removal, so the req42 path is broken.
+Evidence: `switchToreq42.sh:1-4`, `:10-12`.
+
+==== Q5.1.2 Dead counter
+[ANSWERED] `failed` is declared, printed, and never incremented.
+Evidence: `lib/Packager.groovy:116`, `:177`.
+
+==== Q5.1.3 Unreachable post-processing branch
+[ANSWERED] The HTML charset fix-up can never execute, because `html` never reaches
+`convertViaPandoc`.
+Evidence: `lib/Converter.groovy:231-238` versus routing at `:60-61`.
+
+==== Q5.1.4 Hard-coded absolute paths in a test
+[ANSWERED] `test-asciidoc-direct.groovy` points at `/workspaces/arc42-generator/...`, which only
+exists in Codespaces.
+Evidence: `test-asciidoc-direct.groovy:11-13`.
+
+==== Q5.1.5 Documentation drift in CLAUDE.md
+[ANSWERED] The language regex is documented as `/^[A-Z]{2}$/` but implemented as
+`/^[A-Z]{2,}$/`, so the document excludes three-letter codes such as `UKR` that the code
+accepts. The same file still carries responsible-vibe-mcp operating instructions although the
+server was removed in commit `2b28a31`.
+Evidence: `CLAUDE.md:52` versus `lib/Templates.groovy:38`; `CLAUDE.md:217-280`.
+
+==== Q5.1.6 Duplicated image-copy logic
+[ANSWERED] The same recursive copy is written four times with small variations.
+Evidence: `lib/Templates.groovy:127-131`; `lib/Converter.groovy:162-169`, `:287-294`, `:328-330`.
+
+==== Q5.1.7 Untyped data model
+[ANSWERED] All inter-class data is passed as `Map`, so a renamed key fails at runtime, not at
+compile time.
+Evidence: `lib/Discovery.groovy:127-140` consumed at `lib/Converter.groovy:86`, `:95`, `:157`.
+
+=== Q5.2 Security risks
+
+==== Q5.2.1 Unsafe AsciiDoc processing
+[ANSWERED] `SafeMode.UNSAFE` gives template content full file-system reach during conversion.
+Evidence: `lib/Converter.groovy:100`, `:132`, `:311`.
+
+==== Q5.2.2 Unverified binary installation
+[ANSWERED] A `.deb` is downloaded over the network and installed with `dpkg -i` without any
+integrity check; the Groovy ZIP is unpacked the same way.
+Evidence: `build-arc42.sh:39-41`; `Dockerfile:23-25`.
+
+==== Q5.2.3 Disabled Git ownership check
+[ANSWERED] The image marks every directory safe.
+Evidence: `Dockerfile:61`.
+
+==== Q5.2.4 Write access to a foreign repository
+[ANSWERED] The devcontainer requests write permission on `arc42/arc42-template`.
+Evidence: `.devcontainer/devcontainer.json:4-9`.
+
+=== Q5.3 Operational risks
+
+==== Q5.3.1 Destructive submodule refresh
+[ANSWERED] The containerised pipeline deletes the whole `arc42-template` directory before
+re-initialising it, so uncommitted local template work is lost.
+Evidence: `build-arc42.sh:57-60`.
+
+==== Q5.3.2 Green build despite failed conversions
+[ANSWERED] Conversion failures are counted but the process still exits 0 and prints
+"BUILD SUCCESSFUL".
+Evidence: `lib/Converter.groovy:437-440`; `build.groovy:211-215`.
+
+==== Q5.3.3 Silent no-op on a mistyped phase
+[ANSWERED] An unrecognised phase runs nothing and reports success.
+Evidence: `build.groovy:46` with guards at `:129`, `:145`, `:168`, `:185`.
+
+==== Q5.3.4 No automated pipeline
+[ANSWERED] No CI configuration exists, so nothing runs the test suite or the build on push.
+Evidence: no `.github` directory in the repository; requirement
+`docs/arc42_build_process_requirements.md:229`.
+
+==== Q5.3.5 Release requires manual push into the submodule
+[ANSWERED] Artifacts are written into the submodule working tree and must be committed there by
+hand.
+Evidence: `buildconfig.groovy:38`; `build-arc42.sh:200-204`.
+
+=== Q5.4 Dependency and supply-chain risks
+
+==== Q5.4.1 Runtime dependency resolution
+[ANSWERED] Grape resolves AsciidoctorJ, the diagram extension and GPars when the script starts,
+so a repository outage breaks the build outside Docker.
+Evidence: `lib/Converter.groovy:3-5`; `lib/Packager.groovy:3`.
+
+==== Q5.4.2 No lockfile, no checksums
+[ANSWERED] Versions are pinned in four separate places and nowhere verified.
+Evidence: `lib/Converter.groovy:3-5`; `init-groovy-deps.groovy:3-5`; `Dockerfile:23`;
+`build-arc42.sh:26-27`.
+
+==== Q5.4.3 Moving upstream inputs
+[ANSWERED] The build checks out `master` of the template and pulls, so the output depends on
+whatever upstream contains at build time rather than on the recorded submodule commit.
+Evidence: `build-arc42.sh:69`.
+
+==== Q5.4.4 Duplicate version pins that can drift
+[ANSWERED] The same three Grape coordinates appear in two files and must be changed together.
+Evidence: `lib/Converter.groovy:3-5` and `init-groovy-deps.groovy:3-5`.
+
+=== Q5.5 Scaling and performance risks
+
+==== Q5.5.1 Parallelism is one-dimensional
+[ANSWERED] Only the template loop is parallel; the 17 formats of one template run sequentially,
+so speed-up is capped by the number of templates, not by cores.
+Evidence: `lib/Converter.groovy:430-432`.
+
+==== Q5.5.2 Shared Asciidoctor instance across threads
+[ANSWERED] One instance is created per `Converter` and used from every parallel worker.
+Evidence: `lib/Converter.groovy:33` used at `:106`, `:139`, `:313` inside the parallel loop
+`:430`.
+
+==== Q5.5.3 Coarse lock on the progress counter
+[ANSWERED] Every worker synchronises on the same object to increment counters and print.
+Evidence: `lib/Converter.groovy:433`; `lib/Packager.groovy:136`.
+
+==== Q5.5.4 Repeated full image copies
+[ANSWERED] Images are copied once per format per template, and again into the DocBook working
+directory.
+Evidence: `lib/Converter.groovy:54` with `:287-294`; extra copy at `:157-169`.
+
+==== Q5.5.5 Growth limit of the current design
+[OPEN] Category: future-direction. Ask role: Operations.
+No figure exists for how many languages or formats the pipeline must still handle comfortably,
+so the point at which one-dimensional parallelism stops being adequate cannot be derived.
+
+== Recovery notes
+
+* Depth reached: four levels below a fixed node in the Q3.2 and Q3.8 branches, two to three
+  levels elsewhere — matching the code density of a 2,155-line build system.
+* The bounded context was small enough to recover in one pass; no node had to be abandoned at
+  the depth backstop.
+* Nine leaves are `[OPEN]`; they are collected in `OPEN_QUESTIONS-arc42-generator.adoc`.
