@@ -8,7 +8,7 @@ Everything else it touches is a tool it calls.
 
 === Business Context
 
-[plantuml,03_business_context,svg]
+[plantuml,03_business_context,svg,opts=inline]
 ....
 @startuml
 !include <C4/C4_Context.puml>
@@ -51,7 +51,7 @@ Rel(user, site, "downloads a template")
 
 === Technical Context
 
-[plantuml,03_technical_context,svg]
+[plantuml,03_technical_context,svg,opts=inline]
 ....
 @startuml
 !include <C4/C4_Container.puml>

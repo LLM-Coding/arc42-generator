@@ -188,7 +188,7 @@ build continues; both checks are non-fatal (`build-arc42.sh:109-111`, `:187-188`
 Risk R-2 — this violates goal G-4 of the PRD (`build.groovy:211-215`).
 |===
 
-[plantuml,uc1_activity,svg]
+[plantuml,uc1_activity,svg,opts=inline]
 ....
 @startuml
 start
@@ -678,7 +678,7 @@ and SHALL exit with code 1 afterwards.
 
 === Entity Model
 
-[plantuml,spec_entities,svg]
+[plantuml,spec_entities,svg,opts=inline]
 ....
 @startuml
 hide circle
@@ -728,7 +728,7 @@ QS-02.
 
 === State Machine: a single conversion
 
-[plantuml,spec_states,svg]
+[plantuml,spec_states,svg,opts=inline]
 ....
 @startuml
 [*] --> Dispatched

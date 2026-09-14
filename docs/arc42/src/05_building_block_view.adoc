@@ -9,7 +9,7 @@ The orchestrator owns the sequence; four classes own one pipeline stage each.
 `build.groovy` loads them by file name through a `GroovyClassLoader` and passes each one the
 parsed configuration (`build.groovy:101-123`).
 
-[plantuml,05_level1,svg]
+[plantuml,05_level1,svg,opts=inline]
 ....
 @startuml
 !include <C4/C4_Component.puml>
@@ -97,7 +97,7 @@ There is no DTO and no schema; a renamed key fails at runtime. See <<TD-7>>.
 The format name decides the path. A four-way dispatch chain routes each conversion
 (`lib/Converter.groovy:60-71`).
 
-[plantuml,05_level2_converter,svg]
+[plantuml,05_level2_converter,svg,opts=inline]
 ....
 @startuml
 !include <C4/C4_Component.puml>
