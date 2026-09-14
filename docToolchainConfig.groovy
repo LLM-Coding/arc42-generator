@@ -23,7 +23,11 @@ microsite = [:]
 // title in the upper left corner and fallback page title
 microsite.title = 'arc42-generator'
 
-// the landing page ships with the internal theme
+// project landing page: site/ overlays the internal theme, so
+// site/doc/landingpage.gsp replaces the theme's placeholder page. The path is
+// relative to docs/, and pointing outside it keeps the template out of the
+// published site - inside docs/ it would be copied along as a stray asset.
+microsite.siteFolder = '../site'
 microsite.landingPage = 'landingpage.gsp'
 
 // footer and edit links
