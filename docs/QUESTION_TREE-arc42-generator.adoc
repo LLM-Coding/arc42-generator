@@ -906,3 +906,6 @@ so the point at which one-dimensional parallelism stops being adequate cannot be
 * The bounded context was small enough to recover in one pass; no node had to be abandoned at
   the depth backstop.
 * Nine leaves are `[OPEN]`; they are collected in `OPEN_QUESTIONS-arc42-generator.adoc`.
+* Status 2026-09-14: all nine have been answered by the team. The answers live in that file
+  under each question; this tree keeps the questions as they stood at recovery time. Phase 2
+  synthesizes from both files together.
